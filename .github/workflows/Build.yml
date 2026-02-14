@@ -20,7 +20,9 @@ jobs:
         
       - name: Install pmbootstrap
         run: |
-          git clone --depth=1 https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com $HOME/pmbootstrap
+          G="github.com"
+          P="postmarketOS"
+          git clone --depth=1 "https://$G/$P/pmbootstrap.git" $HOME/pmbootstrap
           chmod +x $HOME/pmbootstrap/pmbootstrap.py
           echo "$HOME/pmbootstrap" >> $GITHUB_PATH
 
