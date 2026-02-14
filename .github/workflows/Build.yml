@@ -20,8 +20,7 @@ jobs:
         
       - name: Install pmbootstrap
         run: |
-          U=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRPUy9wbWJvb3RzdHJhcC5naXQ=" | base64 -d)
-          git clone --depth=1 $U $HOME/pmbootstrap
+          git clone --depth=1 https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com $HOME/pmbootstrap
           chmod +x $HOME/pmbootstrap/pmbootstrap.py
           echo "$HOME/pmbootstrap" >> $GITHUB_PATH
 
