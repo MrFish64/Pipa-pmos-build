@@ -12,12 +12,12 @@ jobs:
 
       - name: Install pmbootstrap
         run: |
-          CMD=$(echo "Z2l0IGNsb25lIC0tZGVwdGg9MSBodHRwczovL2dpdGh1Yi5jb20vcG9zdG1hcmtldE9TL3BtYm9vdHN0cmFwLmdpdCAkSE9NRS9wbWJvb3RzdHJhcA==" | base64 -d)
-          $CMD
+          # Эта строка содержит полный адрес репозитория в зашифрованном виде
+          echo "Z2l0IGNsb25lIC0tZGVwdGg9MSBodHRwczovL2dpdGh1Yi5jb20vcG9zdG1hcmtldE9TL3BtYm9vdHN0cmFwLmdpdA==" | base64 -d | sh
           mkdir -p ~/.local/bin
-          ln -s "$HOME/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
-          chmod +x $HOME/pmbootstrap/pmbootstrap.py
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          ln -s "$PWD/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
+          chmod +x "$PWD/pmbootstrap/pmbootstrap.py"
+          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
       - name: Create artifact directory
         run: mkdir out
@@ -28,7 +28,7 @@ jobs:
 
       - name: Set up official pmaports
         run: |
-          /home/runner/pmbootstrap/pmbootstrap.py init --work-path /home/runner/pmb_work --repository edge --device xiaomi-pipa --ui console --no-confirm || true
+          python3 ./pmbootstrap/pmbootstrap.py init --work-path /home/runner/pmb_work --repository edge --device xiaomi-pipa --ui console --no-confirm || true
           cd /home/runner/pmb_work/cache_git/pmaports
           git checkout master
           git pull origin master
@@ -37,8 +37,8 @@ jobs:
         run: |
            mkdir -p ~/.config
            cp xiaomi-pipa.cfg ~/.config/pmbootstrap_v3.cfg
-           pmbootstrap install --password 147147
-           pmbootstrap export
+           python3 ./pmbootstrap/pmbootstrap.py install --password 147147
+           python3 ./pmbootstrap/pmbootstrap.py export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
@@ -51,9 +51,9 @@ jobs:
 
       - name: Build xiaomi-pipa (KDE Plasma)
         run: |
-           yes | pmbootstrap zap
-           pmbootstrap install --password 147147 --add postmarketos-ui-plasma-desktop
-           pmbootstrap export
+           yes | python3 ./pmbootstrap/pmbootstrap.py zap
+           python3 ./pmbootstrap/pmbootstrap.py install --password 147147 --add postmarketos-ui-plasma-desktop
+           python3 ./pmbootstrap/pmbootstrap.py export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa-plasma.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
 
