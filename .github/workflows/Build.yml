@@ -28,14 +28,13 @@ jobs:
 
       - name: Set up official pmaports
         run: |
-          # Настройка через конфиг, так как init в 3.0+ не принимает аргументы
+          mkdir -p ~/.config
+          echo "[pmbootstrap]" > ~/.config/pmbootstrap.cfg
+          echo "config_version = 3" >> ~/.config/pmbootstrap.cfg
           python3 ./pmbootstrap/pmbootstrap.py config work /home/runner/pmb_work
           python3 ./pmbootstrap/pmbootstrap.py config jobs $(nproc)
+          echo -e 'edge\n\n\n\n\n\n\n\n\n\n' | python3 ./pmbootstrap/pmbootstrap.py init || true
           
-          # Прожимаем дефолтные настройки
-          echo -e '\n\n\n\n\n\n\n\n\n\n' | python3 ./pmbootstrap/pmbootstrap.py init || true
-          
-          # Обновляем порты до актуального мастера
           cd /home/runner/pmb_work/cache_git/pmaports
           P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
           git remote set-url origin "$P_URL"
@@ -44,11 +43,9 @@ jobs:
 
       - name: Build xiaomi-pipa (Console)
         run: |
-           # Авто-фикс версии конфига для 3.9.0
            sed -i '/\[pmbootstrap\]/a config_version = 3' xiaomi-pipa.cfg
            mkdir -p ~/.config
            cp xiaomi-pipa.cfg ~/.config/pmbootstrap_v3.cfg
-           
            python3 ./pmbootstrap/pmbootstrap.py install --password 147147
            python3 ./pmbootstrap/pmbootstrap.py export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
