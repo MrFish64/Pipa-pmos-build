@@ -1,5 +1,5 @@
 # 🧪 postmarketOS for Xiaomi Pad 6 (pipa)
-               <img width="2048" height="1280" alt="17710919900792525412714054627212" src="https://github.com/user-attachments/assets/e21eeb29-76fd-4c64-8e1f-60b5cfa10ab3" />
+<img alt="Image" src="https://github.com/user-attachments/assets/3da15b14-b144-4315-bfeb-2e28cef0d18e" />
 
   Custom postmarketOS builds for Xiaomi Pad 6 (codename: pipa)</em></p>
 </div>
