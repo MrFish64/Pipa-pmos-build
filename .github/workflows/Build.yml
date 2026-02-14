@@ -7,18 +7,18 @@ jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout your repository
+      - name: Check out your repository
         uses: actions/checkout@v4
 
       - name: Install pmbootstrap
         run: |
-          # Ссылка на репозиторий зашифрована внутри, чтобы не порезал Хром
-          U=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRPUy9wbWJvb3RzdHJhcC5naXQ=" | base64 -d)
-          git clone --depth=1 "$U" pmbootstrap-repo
+          # Ссылка зашифрована, чтобы Хром её не порезал
+          URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
+          git clone --depth=1 "$URL"
           mkdir -p ~/.local/bin
-          ln -s "$PWD/pmbootstrap-repo/pmbootstrap.py" ~/.local/bin/pmbootstrap
-          chmod +x "$PWD/pmbootstrap-repo/pmbootstrap.py"
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          ln -s "$PWD/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
+          chmod +x "$PWD/pmbootstrap/pmbootstrap.py"
+          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
       - name: Create artifact directory
         run: mkdir out
@@ -29,18 +29,22 @@ jobs:
 
       - name: Set up official pmaports
         run: |
-          # Используем прямой путь к скрипту для надежности
-          python3 "$PWD/pmbootstrap-repo/pmbootstrap.py" init --work-path /home/runner/pmb_work --repository edge --device xiaomi-pipa --ui console --no-confirm || true
+          ./pmbootstrap/pmbootstrap.py init --work-path /home/runner/pmb_work --repository edge --device xiaomi-pipa --ui console --no-confirm || true
           cd /home/runner/pmb_work/cache_git/pmaports
+          # Ссылка на порты тоже зашифрована
+          P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
+          git remote set-url origin "$P_URL"
           git fetch origin master
-          git checkout -B master origin/master
+          git reset --hard origin/master
 
       - name: Build xiaomi-pipa (Console)
         run: |
+           # Фикс ошибки версии 3.9.0
+           sed -i '/\[pmbootstrap\]/a config_version = 3' xiaomi-pipa.cfg
            mkdir -p ~/.config
            cp xiaomi-pipa.cfg ~/.config/pmbootstrap_v3.cfg
-           pmbootstrap install --password 147147
-           pmbootstrap export
+           ./pmbootstrap/pmbootstrap.py install --password 147147
+           ./pmbootstrap/pmbootstrap.py export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
@@ -48,21 +52,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
            name: xiaomi-pipa-none
-           path: out/*.img
-           retention-days: 7
-
-      - name: Build xiaomi-pipa (KDE Plasma)
-        run: |
-           yes | pmbootstrap zap
-           pmbootstrap install --password 147147 --add postmarketos-ui-plasma-desktop
-           pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa-plasma.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
-
-      - name: Upload artifacts (KDE Plasma)
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-plasma
            path: out/*.img
            retention-days: 7
 
