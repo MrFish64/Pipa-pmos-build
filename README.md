@@ -1,8 +1,6 @@
 # 🧪 postmarketOS for Xiaomi Pad 6 (pipa)
 
-<div align="center">
-  <img src="gnome.png" alt="Xiaomi Pad 6"/>
-  <p><em>Custom postmarketOS builds for Xiaomi Pad 6 (codename: pipa)</em></p>
+  Custom postmarketOS builds for Xiaomi Pad 6 (codename: pipa)</em></p>
 </div>
 
 ---
