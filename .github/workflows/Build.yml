@@ -12,60 +12,53 @@ jobs:
 
       - name: Install pmbootstrap
         run: |
-          URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
-          git clone --depth=1 "$URL"
-          mkdir -p ~/.local/bin
-          ln -s "$PWD/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
-          chmod +x "$PWD/pmbootstrap/pmbootstrap.py"
+          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
+          git clone --depth=1 "$U"
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
       - name: Create artifact directory
         run: mkdir out
         
-      - name: Substitute placeholders in configs
+      - name: Prepare Config and Ports
         run: |
-           find . -type f -name "*.cfg" -exec sed -i "s|HOME|$(echo $HOME)|;s|NPROC|$(nproc)|" {} +
-
-      - name: Set up official pmaports
-        run: |
-          mkdir -p ~/.config
-          cat <<EOF > ~/.config/pmbootstrap.cfg
-          [pmbootstrap]
-          config_version = 3
-          work = /home/runner/pmb_work
-          jobs = $(nproc)
-          repository = edge
-          mirror_alpine = http://dl-cdn.alpinelinux.org
-          aports = /home/runner/pmb_work/cache_git/pmaports
-          EOF
-          
-          mkdir -p /home/runner/pmb_work/cache_git
-          P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
-          git clone --depth=1 "$P_URL" /home/runner/pmb_work/cache_git/pmaports
+           # 1. Подставляем HOME и NPROC в твой конфиг
+           sed -i "s|HOME|$(echo $HOME)|g;s|NPROC|$(nproc)|g" xiaomi-pipa.cfg
+           # 2. Добавляем версию, чтобы не ругался
+           sed -i '/\[pmbootstrap\]/a config_version = 3' xiaomi-pipa.cfg
+           
+           # 3. Узнаем, какой путь к портам прописан в твоем конфиге
+           APORTS_PATH=$(grep "aports =" xiaomi-pipa.cfg | cut -d' ' -f3)
+           mkdir -p $(dirname "$APORTS_PATH")
+           
+           # 4. Клонируем официальные порты именно по этому адресу
+           P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
+           git clone --depth=1 "$P_URL" "$APORTS_PATH"
+           
+           # 5. Устанавливаем твой конфиг как основной
+           mkdir -p ~/.config
+           cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
 
       - name: Build xiaomi-pipa (Console)
         run: |
-           sed -i '/\[pmbootstrap\]/a config_version = 3' xiaomi-pipa.cfg
-           # Перезаписываем временный конфиг твоим xiaomi-pipa.cfg
-           cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
-           
+           # Запускаем билд (init больше не нужен, конфиг и порты уже на месте)
            python3 ./pmbootstrap/pmbootstrap.py install --password 147147
            python3 ./pmbootstrap/pmbootstrap.py export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
-      - name: Upload artifacts (Console)
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
            name: xiaomi-pipa-none
            path: out/*.img
            retention-days: 7
 
-      - name: Copy kernel apk
+      - name: Copy and Upload kernel
         run: |
-           rm -f out/*
-           cp /home/runner/pmb_work/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
-      
+           # Ищем ядро там, где его сохранил pmbootstrap
+           WORK_PATH=$(grep "work =" xiaomi-pipa.cfg | cut -d' ' -f3)
+           cp $WORK_PATH/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
+           
       - name: Upload kernel
         uses: actions/upload-artifact@v4
         with:
