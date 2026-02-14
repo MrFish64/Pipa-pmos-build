@@ -20,18 +20,18 @@ jobs:
         
       - name: Install pmbootstrap from git
         run: |
-          git clone --depth=1 https://gitlab.postmarketos.org
-          chmod +x "$PWD/pmbootstrap/pmbootstrap.py"
-          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
+          git clone --depth=1 https://gitlab.postmarketos.org $HOME/pmbootstrap
+          chmod +x $HOME/pmbootstrap/pmbootstrap.py
+          echo "$HOME/pmbootstrap" >> $GITHUB_PATH
 
       - name: Init pmbootstrap (Official Edge)
         run: |
-          ./pmbootstrap/pmbootstrap.py init --work-path /home/runner/pmb_work --repository edge --device xiaomi-pipa --ui console --no-confirm
+          python3 $HOME/pmbootstrap/pmbootstrap.py init --work-path /home/runner/pmb_work --repository edge --device xiaomi-pipa --ui console --no-confirm
 
       - name: Build xiaomi-pipa (Console)
         run: |
-           pmbootstrap install --password 147147
-           pmbootstrap export
+           python3 $HOME/pmbootstrap/pmbootstrap.py install --password 147147
+           python3 $HOME/pmbootstrap/pmbootstrap.py export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
@@ -44,9 +44,9 @@ jobs:
 
       - name: Build xiaomi-pipa (KDE Plasma)
         run: |
-           yes | pmbootstrap zap
-           pmbootstrap install --password 147147 --add postmarketos-ui-plasma-desktop
-           pmbootstrap export
+           yes | python3 $HOME/pmbootstrap/pmbootstrap.py zap
+           python3 $HOME/pmbootstrap/pmbootstrap.py install --password 147147 --add postmarketos-ui-plasma-desktop
+           python3 $HOME/pmbootstrap/pmbootstrap.py export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa-plasma.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
 
@@ -59,9 +59,9 @@ jobs:
             
       - name: Build xiaomi-pipa (GNOME)
         run: |
-           yes | pmbootstrap zap
-           pmbootstrap install --password 147147 --add postmarketos-ui-gnome
-           pmbootstrap export
+           yes | python3 $HOME/pmbootstrap/pmbootstrap.py zap
+           python3 $HOME/pmbootstrap/pmbootstrap.py install --password 147147 --add postmarketos-ui-gnome
+           python3 $HOME/pmbootstrap/pmbootstrap.py export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa-gnome.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-gnome.img
 
