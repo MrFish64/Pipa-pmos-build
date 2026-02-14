@@ -18,9 +18,10 @@ jobs:
       - name: Create artifact directory
         run: mkdir out
         
-      - name: Install pmbootstrap from git
+      - name: Install pmbootstrap from GitHub Mirror
         run: |
-          git clone --depth=1 https://gitlab.postmarketos.org $HOME/pmbootstrap
+          # Используем зеркало, чтобы избежать проблем с редиректами Гитлаба
+          git clone --depth=1 https://github.com $HOME/pmbootstrap
           chmod +x $HOME/pmbootstrap/pmbootstrap.py
           echo "$HOME/pmbootstrap" >> $GITHUB_PATH
 
