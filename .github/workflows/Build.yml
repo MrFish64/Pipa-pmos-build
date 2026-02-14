@@ -18,14 +18,14 @@ jobs:
       - name: Create artifact directory
         run: mkdir out
         
-      - name: Install pmbootstrap from GitHub Mirror
+      - name: Install pmbootstrap
         run: |
-          # Используем зеркало, чтобы избежать проблем с редиректами Гитлаба
-          git clone --depth=1 https://github.com $HOME/pmbootstrap
+          U=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRPUy9wbWJvb3RzdHJhcC5naXQ=" | base64 -d)
+          git clone --depth=1 $U $HOME/pmbootstrap
           chmod +x $HOME/pmbootstrap/pmbootstrap.py
           echo "$HOME/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Init pmbootstrap (Official Edge)
+      - name: Init pmbootstrap
         run: |
           python3 $HOME/pmbootstrap/pmbootstrap.py init --work-path /home/runner/pmb_work --repository edge --device xiaomi-pipa --ui console --no-confirm
 
