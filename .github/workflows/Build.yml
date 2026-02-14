@@ -12,7 +12,6 @@ jobs:
 
       - name: Install pmbootstrap
         run: |
-          # Ссылка зашифрована, чтобы Хром её не порезал
           URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
           git clone --depth=1 "$URL"
           mkdir -p ~/.local/bin
@@ -29,9 +28,15 @@ jobs:
 
       - name: Set up official pmaports
         run: |
-          ./pmbootstrap/pmbootstrap.py init --work-path /home/runner/pmb_work --repository edge --device xiaomi-pipa --ui console --no-confirm || true
+          # Настройка через конфиг, так как init в 3.0+ не принимает аргументы
+          python3 ./pmbootstrap/pmbootstrap.py config work /home/runner/pmb_work
+          python3 ./pmbootstrap/pmbootstrap.py config jobs $(nproc)
+          
+          # Прожимаем дефолтные настройки
+          echo -e '\n\n\n\n\n\n\n\n\n\n' | python3 ./pmbootstrap/pmbootstrap.py init || true
+          
+          # Обновляем порты до актуального мастера
           cd /home/runner/pmb_work/cache_git/pmaports
-          # Ссылка на порты тоже зашифрована
           P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
           git remote set-url origin "$P_URL"
           git fetch origin master
@@ -39,12 +44,13 @@ jobs:
 
       - name: Build xiaomi-pipa (Console)
         run: |
-           # Фикс ошибки версии 3.9.0
+           # Авто-фикс версии конфига для 3.9.0
            sed -i '/\[pmbootstrap\]/a config_version = 3' xiaomi-pipa.cfg
            mkdir -p ~/.config
            cp xiaomi-pipa.cfg ~/.config/pmbootstrap_v3.cfg
-           ./pmbootstrap/pmbootstrap.py install --password 147147
-           ./pmbootstrap/pmbootstrap.py export
+           
+           python3 ./pmbootstrap/pmbootstrap.py install --password 147147
+           python3 ./pmbootstrap/pmbootstrap.py export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
