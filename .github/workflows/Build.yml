@@ -2,8 +2,6 @@ name: Xiaomi Pad 6 postmarketOS
 on:
   push:
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * 5'
 
 jobs:
   build-image:
@@ -12,63 +10,43 @@ jobs:
       - name: Check out build configurations
         uses: actions/checkout@v4
 
-      - name: Set current date variable
-        run: echo "CURRENT_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
-        
-      - name: Create artifact directory
-        run: mkdir out
-        
-      - name: Substitute placeholders in configs
+      - name: Substitute placeholders
         run: |
            sed -i '/\[pmbootstrap\]/a config_version = 3' xiaomi-pipa.cfg
            find . -type f -name "*.cfg" -exec sed -i "s|HOME|$(echo $HOME)|;s|NPROC|$(nproc)|" {} +
 
-      - name: Install pmbootstrap from git
+      - name: Install pmbootstrap
         run: |
           URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
           git clone --depth=1 "$URL"
-          mkdir -p ~/.local/bin
-          ln -s "$PWD/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
-          chmod +x "$PWD/pmbootstrap/pmbootstrap.py"
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Set up pmaports (Official Edge)
+      - name: Set up pmaports
         run: |
           mkdir -p ~/.config
           cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
-          echo -e 'edge\n\n\n\n\n\n\n\n\n\n' | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
+          python3 "$PWD/pmbootstrap/pmbootstrap.py" init --config ~/.config/pmbootstrap.cfg --no-confirm || true
           
+          mkdir -p ~/.local/var/pmbootstrap/cache_git/pmaports
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
           P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
-          git remote set-url origin "$P_URL"
+          git init . || true
+          git remote add origin "$P_URL" || git remote set-url origin "$P_URL"
           git fetch origin master
           git reset --hard origin/master
 
-      - name: Build the xiaomi-pipa without DE
+      - name: Build xiaomi-pipa
         run: |
-           mkdir -p ~/.config
            cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
            python3 "$PWD/pmbootstrap/pmbootstrap.py" install --password 147147
            python3 "$PWD/pmbootstrap/pmbootstrap.py" export
+           mkdir -p out
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
-      - name: Upload artifacts xiaomi-pipa
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-none_${{ env.CURRENT_DATE }}
+           name: xiaomi-pipa-none
            path: out/*.img*
            retention-days: 7
-                       
-      - name: Copy xiaomi-pipa kernel
-        run: |
-           rm -f out/*
-           cp ~/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
-      
-      - name: Upload artifacts xiaomi-pipa kernel
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-kernel_${{ env.CURRENT_DATE }}
-           path: out/*.apk
-           retention-days: 7
-           
