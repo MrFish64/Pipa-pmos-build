@@ -18,9 +18,8 @@ jobs:
       - name: Install pmbootstrap from Git
         run: |
           git clone --depth=1 https://gitlab.postmarketos.org $HOME/pmbootstrap
-          echo "$HOME/pmbootstrap" >> $GITHUB_PATH
-          ln -s $HOME/pmbootstrap/pmbootstrap.py $HOME/pmbootstrap/pmbootstrap
           chmod +x $HOME/pmbootstrap/pmbootstrap.py
+          echo "$HOME/pmbootstrap" >> $GITHUB_PATH
 
       - name: Set up pmbootstrap and pmaports
         run: |
