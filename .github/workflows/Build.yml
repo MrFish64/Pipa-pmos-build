@@ -1,4 +1,4 @@
-name: Build pipa images
+name: Build official pipa images
 on:
   push:
   workflow_dispatch:
@@ -9,79 +9,78 @@ jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out build configurations
+      - name: Check out
         uses: actions/checkout@v4
+
+      - name: Set current date
+        run: echo "CURRENT_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
         
       - name: Create artifact directory
         run: mkdir out
         
-      - name: Install pmbootstrap from Git
+      - name: Install pmbootstrap from git
         run: |
-          git clone --depth=1 https://gitlab.postmarketos.org $HOME/pmbootstrap
-          chmod +x $HOME/pmbootstrap/pmbootstrap.py
-          echo "$HOME/pmbootstrap" >> $GITHUB_PATH
+          git clone --depth=1 https://gitlab.postmarketos.org
+          chmod +x "$PWD/pmbootstrap/pmbootstrap.py"
+          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Set up pmbootstrap and pmaports
+      - name: Init pmbootstrap (Official Edge)
         run: |
-          U=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
-          $HOME/pmbootstrap/pmbootstrap.py init --work-path /home/runner/pmb_work --repository edge --device xiaomi-pipa --ui console --no-confirm
-          cd /home/runner/pmb_work/cache_git/pmaports
-          git remote add pipa $U
-          git fetch pipa
-          git reset --hard pipa/master
+          ./pmbootstrap/pmbootstrap.py init --work-path /home/runner/pmb_work --repository edge --device xiaomi-pipa --ui console --no-confirm
 
       - name: Build xiaomi-pipa (Console)
         run: |
-           $HOME/pmbootstrap/pmbootstrap.py install --password 147147
-           $HOME/pmbootstrap/pmbootstrap.py export
+           pmbootstrap install --password 147147
+           pmbootstrap export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
       - name: Upload artifacts (Console)
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-none
+           name: xiaomi-pipa-none_${{ env.CURRENT_DATE }}
            path: out/*.img
            retention-days: 7
 
       - name: Build xiaomi-pipa (KDE Plasma)
         run: |
-           yes | $HOME/pmbootstrap/pmbootstrap.py zap
-           $HOME/pmbootstrap/pmbootstrap.py install --password 147147 --add postmarketos-ui-plasma-desktop
-           $HOME/pmbootstrap/pmbootstrap.py export
+           yes | pmbootstrap zap
+           pmbootstrap install --password 147147 --add postmarketos-ui-plasma-desktop
+           pmbootstrap export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa-plasma.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
 
       - name: Upload artifacts (KDE Plasma)
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-plasma
+           name: xiaomi-pipa-plasma_${{ env.CURRENT_DATE }}
            path: out/*.img
            retention-days: 7
             
       - name: Build xiaomi-pipa (GNOME)
         run: |
-           yes | $HOME/pmbootstrap/pmbootstrap.py zap
-           $HOME/pmbootstrap/pmbootstrap.py install --password 147147 --add postmarketos-ui-gnome
-           $HOME/pmbootstrap/pmbootstrap.py export
+           yes | pmbootstrap zap
+           pmbootstrap install --password 147147 --add postmarketos-ui-gnome
+           pmbootstrap export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa-gnome.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-gnome.img
 
       - name: Upload artifacts (GNOME)
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-gnome
+           name: xiaomi-pipa-gnome_${{ env.CURRENT_DATE }}
            path: out/*.img
            retention-days: 7
            
       - name: Copy kernel apk
         run: |
+           rm -f out/*
            cp /home/runner/pmb_work/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
       
       - name: Upload kernel
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-kernel
+           name: xiaomi-pipa-kernel_${{ env.CURRENT_DATE }}
            path: out/*.apk
            retention-days: 7
            
