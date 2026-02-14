@@ -7,8 +7,17 @@ jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out
+      - name: Check out your repository
         uses: actions/checkout@v4
+
+      - name: Install pmbootstrap
+        run: |
+          U=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRPUy9wbWJvb3RzdHJhcC5naXQ=" | base64 -d)
+          git clone --depth=1 "$U" $HOME/pmbootstrap
+          mkdir -p ~/.local/bin
+          ln -s "$HOME/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
+          chmod +x $HOME/pmbootstrap/pmbootstrap.py
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Create artifact directory
         run: mkdir out
@@ -17,25 +26,15 @@ jobs:
         run: |
            find . -type f -name "*.cfg" -exec sed -i "s|HOME|$(echo $HOME)|;s|NPROC|$(nproc)|" {} +
 
-      - name: Install pmbootstrap
-        run: |
-          # Клонируем через официальное зеркало GitHub
-          git clone --depth=1 https://github.com $HOME/pmbootstrap
-          mkdir -p ~/.local/bin
-          ln -s "$HOME/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
       - name: Set up official pmaports
         run: |
-          # Инициализируем и сразу переключаем на официальный master
-          pmbootstrap init --work-path /home/runner/pmb_work --repository edge --device xiaomi-pipa --ui console --no-confirm || true
+          /home/runner/pmbootstrap/pmbootstrap.py init --work-path /home/runner/pmb_work --repository edge --device xiaomi-pipa --ui console --no-confirm || true
           cd /home/runner/pmb_work/cache_git/pmaports
           git checkout master
           git pull origin master
 
       - name: Build xiaomi-pipa (Console)
         run: |
-           # Гарантируем правильный путь конфига
            mkdir -p ~/.config
            cp xiaomi-pipa.cfg ~/.config/pmbootstrap_v3.cfg
            pmbootstrap install --password 147147
@@ -68,7 +67,6 @@ jobs:
       - name: Copy kernel apk
         run: |
            rm -f out/*
-           # Для edge/master путь всегда /edge/
            cp /home/runner/pmb_work/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
       
       - name: Upload kernel
