@@ -29,23 +29,26 @@ jobs:
       - name: Set up official pmaports
         run: |
           mkdir -p ~/.config
-          echo "[pmbootstrap]" > ~/.config/pmbootstrap.cfg
-          echo "config_version = 3" >> ~/.config/pmbootstrap.cfg
-          python3 ./pmbootstrap/pmbootstrap.py config work /home/runner/pmb_work
-          python3 ./pmbootstrap/pmbootstrap.py config jobs $(nproc)
-          echo -e 'edge\n\n\n\n\n\n\n\n\n\n' | python3 ./pmbootstrap/pmbootstrap.py init || true
+          cat <<EOF > ~/.config/pmbootstrap.cfg
+          [pmbootstrap]
+          config_version = 3
+          work = /home/runner/pmb_work
+          jobs = $(nproc)
+          repository = edge
+          mirror_alpine = http://dl-cdn.alpinelinux.org
+          aports = /home/runner/pmb_work/cache_git/pmaports
+          EOF
           
-          cd /home/runner/pmb_work/cache_git/pmaports
+          mkdir -p /home/runner/pmb_work/cache_git
           P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
-          git remote set-url origin "$P_URL"
-          git fetch origin master
-          git reset --hard origin/master
+          git clone --depth=1 "$P_URL" /home/runner/pmb_work/cache_git/pmaports
 
       - name: Build xiaomi-pipa (Console)
         run: |
            sed -i '/\[pmbootstrap\]/a config_version = 3' xiaomi-pipa.cfg
-           mkdir -p ~/.config
-           cp xiaomi-pipa.cfg ~/.config/pmbootstrap_v3.cfg
+           # Перезаписываем временный конфиг твоим xiaomi-pipa.cfg
+           cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
+           
            python3 ./pmbootstrap/pmbootstrap.py install --password 147147
            python3 ./pmbootstrap/pmbootstrap.py export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
