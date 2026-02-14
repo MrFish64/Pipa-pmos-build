@@ -1,68 +1,74 @@
-name: Build Official Pipa Edge
+name: Xiaomi Pad 6 postmarketOS
 on:
   push:
   workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 5'
 
 jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out your repository
+      - name: Check out build configurations
         uses: actions/checkout@v4
 
-      - name: Install pmbootstrap
-        run: |
-          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
-          git clone --depth=1 "$U"
-          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
-
+      - name: Set current date variable
+        run: echo "CURRENT_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
+        
       - name: Create artifact directory
         run: mkdir out
         
-      - name: Prepare Config and Ports
+      - name: Substitute placeholders in configs
         run: |
-           # 1. Подставляем HOME и NPROC в твой конфиг
-           sed -i "s|HOME|$(echo $HOME)|g;s|NPROC|$(nproc)|g" xiaomi-pipa.cfg
-           # 2. Добавляем версию, чтобы не ругался
            sed -i '/\[pmbootstrap\]/a config_version = 3' xiaomi-pipa.cfg
-           
-           # 3. Узнаем, какой путь к портам прописан в твоем конфиге
-           APORTS_PATH=$(grep "aports =" xiaomi-pipa.cfg | cut -d' ' -f3)
-           mkdir -p $(dirname "$APORTS_PATH")
-           
-           # 4. Клонируем официальные порты именно по этому адресу
-           P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
-           git clone --depth=1 "$P_URL" "$APORTS_PATH"
-           
-           # 5. Устанавливаем твой конфиг как основной
+           find . -type f -name "*.cfg" -exec sed -i "s|HOME|$(echo $HOME)|;s|NPROC|$(nproc)|" {} +
+
+      - name: Install pmbootstrap from git
+        run: |
+          URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
+          git clone --depth=1 "$URL"
+          mkdir -p ~/.local/bin
+          ln -s "$PWD/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
+          chmod +x "$PWD/pmbootstrap/pmbootstrap.py"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Set up pmaports (Official Edge)
+        run: |
+          mkdir -p ~/.config
+          cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
+          echo -e 'edge\n\n\n\n\n\n\n\n\n\n' | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
+          
+          cd ~/.local/var/pmbootstrap/cache_git/pmaports
+          P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
+          git remote set-url origin "$P_URL"
+          git fetch origin master
+          git reset --hard origin/master
+
+      - name: Build the xiaomi-pipa without DE
+        run: |
            mkdir -p ~/.config
            cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
-
-      - name: Build xiaomi-pipa (Console)
-        run: |
-           # Запускаем билд (init больше не нужен, конфиг и порты уже на месте)
-           python3 ./pmbootstrap/pmbootstrap.py install --password 147147
-           python3 ./pmbootstrap/pmbootstrap.py export
+           python3 "$PWD/pmbootstrap/pmbootstrap.py" install --password 147147
+           python3 "$PWD/pmbootstrap/pmbootstrap.py" export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
-      - name: Upload artifacts
+      - name: Upload artifacts xiaomi-pipa
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-none
-           path: out/*.img
+           name: xiaomi-pipa-none_${{ env.CURRENT_DATE }}
+           path: out/*.img*
            retention-days: 7
-
-      - name: Copy and Upload kernel
+                       
+      - name: Copy xiaomi-pipa kernel
         run: |
-           # Ищем ядро там, где его сохранил pmbootstrap
-           WORK_PATH=$(grep "work =" xiaomi-pipa.cfg | cut -d' ' -f3)
-           cp $WORK_PATH/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
-           
-      - name: Upload kernel
+           rm -f out/*
+           cp ~/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
+      
+      - name: Upload artifacts xiaomi-pipa kernel
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-kernel
+           name: xiaomi-pipa-kernel_${{ env.CURRENT_DATE }}
            path: out/*.apk
            retention-days: 7
            
