@@ -1,106 +1,106 @@
-name: Build Xiaomi Pad 6 postmarketOS Edge
+name: "Xiaomi Pad 6: Ultimate postmarketOS Build"
+
 on:
   push:
+    branches: [ main ]
   workflow_dispatch:
 
+# Общие настройки для всех заданий
+env:
+  PMB_VERSION: "master"
+  DEVICE: "xiaomi-pipa"
+  PMB_USER: "user"
+  PMB_PASS: "147147"
+
 jobs:
-  build-plasma:
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      date: ${{ steps.set-date.outputs.date }}
     steps:
-      - name: Checkout
+      - id: set-date
+        run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        ui: [plasma-desktop, gnome-mobile]
+      fail-fast: false
+    name: Build ${{ matrix.ui }}
+    
+    steps:
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Free Space
-        run: sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
-
-      - name: Setup pmbootstrap
+      - name: Maximize Build Space
         run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
+          sudo docker image prune --all --force
+          df -h
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 git openssl
           U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
-          git clone --depth=1 "$U"
+          git clone --depth=1 -b ${{ env.PMB_VERSION }} "$U" pmbootstrap
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Build Plasma
+      - name: Initialize pmbootstrap Environment
         run: |
-          # 1. Создаем структуру именно там, где ОН ХОЧЕТ
-          WORK_DIR="/home/runner/.local/var/pmbootstrap"
+          mkdir -p ~/.config
+          WORK_DIR="/home/runner/work_pmb"
           mkdir -p "$WORK_DIR/cache_git"
-          mkdir -p /home/runner/.config
           
-          # 2. Клонируем порты по ЕГО любимому пути
-          P=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
-          git clone --depth=1 -b master "$P" "$WORK_DIR/cache_git/pmaports"
-          
-          # 3. Пишем конфиг с ЕГО путями
-          cat <<EOF > /home/runner/.config/pmbootstrap.cfg
-          [pmbootstrap]
-          config_version = 3
-          device = xiaomi-pipa
-          work = $WORK_DIR
-          jobs = $(nproc)
-          repository = edge
-          ui = plasma-desktop
-          systemd = never
-          [providers]
-          firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
-          EOF
-          
-          # 4. Запускаем сборку НАПРЯМУЮ без init
-          PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg"
-          $PMB install --password 147147 --add postmarketos-ui-plasma-desktop,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,maliit-keyboard
-          $PMB export
-          mkdir -p out && cp /tmp/postmarketOS-export/boot.img out/boot-plasma.img && cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-plasma.img
-
-      - name: Upload
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-plasma-edge
-           path: out/*.img
-
-  build-gnome:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Free Space
-        run: sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
-
-      - name: Setup pmbootstrap
-        run: |
-          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
-          git clone --depth=1 "$U"
-          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
-
-      - name: Build GNOME
-        run: |
-          WORK_DIR="/home/runner/.local/var/pmbootstrap"
-          mkdir -p "$WORK_DIR/cache_git"
-          mkdir -p /home/runner/.config
-          
+          # Клонируем порты вручную, чтобы избежать интерактивных вопросов
           P=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
           git clone --depth=1 "$P" "$WORK_DIR/cache_git/pmaports"
           
-          cat <<EOF > /home/runner/.config/pmbootstrap.cfg
+          # Создаем ИДЕАЛЬНЫЙ конфиг 3.9.0
+          cat <<EOF > ~/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
-          device = xiaomi-pipa
+          device = ${{ env.DEVICE }}
           work = $WORK_DIR
           jobs = $(nproc)
           repository = edge
-          ui = gnome-mobile
+          ui = ${{ matrix.ui }}
           systemd = never
+          
           [providers]
           firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
+          
+          [mirrors]
           EOF
           
-          PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg"
-          $PMB install --password 147147 --add postmarketos-ui-gnome-mobile,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf
-          $PMB export
-          mkdir -p out && cp /tmp/postmarketOS-export/boot.img out/boot-gnome.img && cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-gnome.img
+          # Фиксируем версию воркспейса (8), чтобы избежать ошибок миграции
+          echo "8" > "$WORK_DIR/version"
 
-      - name: Upload
+      - name: Full System Build
+        run: |
+          PMB="python3 pmbootstrap/pmbootstrap.py -y"
+          
+          # Добавляем все критические компоненты для Pad 6 ( pipa )
+          EXTRA="device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,mesa-dri-gallium"
+          if [ "${{ matrix.ui }}" == "plasma-desktop" ]; then
+            EXTRA="$EXTRA,maliit-keyboard"
+          fi
+          
+          $PMB install --password ${{ env.PMB_PASS }} --add "$EXTRA"
+          
+          # Экспорт в режиме fastboot (разделяет boot и rootfs)
+          $PMB export --type fastboot
+          
+          mkdir -p out
+          cp /tmp/postmarketOS-export/boot.img out/boot-${{ matrix.ui }}.img
+          cp /tmp/postmarketOS-export/${{ env.DEVICE }}.img out/rootfs-${{ matrix.ui }}.img
+
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-gnome-edge
-           path: out/*.img
-           
+          name: pmos-${{ env.DEVICE }}-${{ matrix.ui }}-${{ needs.prepare.outputs.date }}
+          path: out/*.img
+          retention-days: 5
+          
