@@ -12,10 +12,7 @@ jobs:
 
       - name: Free Disk Space (20GB+)
         run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
 
       - name: Create artifact directory
         run: mkdir out
@@ -28,31 +25,27 @@ jobs:
 
       - name: Force Official Init
         run: |
-          # Выбираем edge и разрешаем проприетарные прошивки (non-free)
           (echo "edge"; yes "") | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
-          
           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py"
           $PMB config device xiaomi-pipa
           $PMB config jobs $(nproc)
           $PMB config systemd never
-          # ВКЛЮЧАЕМ NON-FREE
-          $PMB config providers "{"firmware-xiaomi-pipa":"device-xiaomi-pipa-nonfree-firmware"}"
+          # Добавляем non-free провайдера через sed
+          sed -i '/\[providers\]/a firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware' ~/.config/pmbootstrap.cfg
 
       - name: Build and Export Full Support Image
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y --details-to-stdout"
            
-           # Пакеты для GPU (mesa), Звука (alsa), Тача и Сенсоров (firmware)
+           # Полный набор для графики и железа
            $PMB install --password 147147 \
              --add postmarketos-ui-plasma-desktop \
              --add device-xiaomi-pipa-nonfree-firmware \
              --add msm-firmware-loader \
              --add alsa-ucm-conf \
-             --add mesa-dri-gallium \
-             --add xf86-video-freedreno
+             --add mesa-dri-gallium
            
            $PMB export
-           
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
 
