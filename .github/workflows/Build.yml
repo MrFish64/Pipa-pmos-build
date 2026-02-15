@@ -1,4 +1,4 @@
-name: Xiaomi Pad 6 Official Edge Build
+name: Xiaomi Pad 6 Official Edge Build (Plasma)
 on:
   push:
   workflow_dispatch:
@@ -28,43 +28,40 @@ jobs:
 
       - name: Force Official Init
         run: |
-          # Авто-ответы для 3.9.0 (выбираем edge и жмем Enter)
           (echo "edge"; yes "") | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
-          
-          # Жесткая настройка под pipa
           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py"
           $PMB config device xiaomi-pipa
           $PMB config extra_packages parted,cfdisk,gparted
           $PMB config jobs $(nproc)
           $PMB config systemd never
 
-      - name: Build xiaomi-pipa
+      - name: Build xiaomi-pipa (KDE Plasma)
         run: |
-           # --details-to-stdout покажет КОРЕНЬ ошибки, если билд упадет
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y --details-to-stdout"
            
-           # Сборка системы
-           $PMB install --password 147147
+           # Сборка системы С ГРАФИКОЙ (UI: Plasma Desktop)
+           $PMB install --password 147147 --add postmarketos-ui-plasma-desktop
            
-           # Экспорт образов
            $PMB export
-           
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
+           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa-plasma.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
 
-      - name: Upload artifacts
+      - name: Upload artifacts (Plasma Image)
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-none
+           name: xiaomi-pipa-plasma-image
            path: out/*.img*
            retention-days: 7
 
       - name: Copy and Upload kernel
         run: |
-           W=$(python3 ./pmbootstrap/pmbootstrap.py config work)
-           cp $W/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
-      
-      - name: Upload kernel
+           # Удаляем имиджи, чтобы не мешали
+           rm -f out/*.img
+           WORK_PATH=$(python3 ./pmbootstrap/pmbootstrap.py config work)
+           # Умный поиск ядра по всему воркспейсу
+           find "$WORK_PATH/packages" -name "linux-postmarketos-qcom-sm8250-pipa-*.apk" -exec cp {} out/ \;
+
+      - name: Upload kernel apk
         uses: actions/upload-artifact@v4
         with:
            name: xiaomi-pipa-kernel
