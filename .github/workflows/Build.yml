@@ -14,6 +14,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: postmarketOS/pmbootstrap
+          ref: master
           path: pmbootstrap-repo
 
       - name: Setup Configuration
@@ -32,15 +33,9 @@ jobs:
 
       - name: Build xiaomi-pipa
         run: |
-          # Используем абсолютный путь к скачанному pmbootstrap
           PMB="python3 $GITHUB_WORKSPACE/pmbootstrap-repo/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg"
-          
-          # Установка (сама скачает порты в пустую папку pmb_work)
           $PMB install --password 147147
-          
-          # Экспорт образов
           $PMB export
-          
           mkdir -p out
           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
