@@ -44,14 +44,14 @@ GitHub Actions Artifacts
 
 1. **Download** your preferred image from the Actions tab  
 2. **Extract** the ZIP archive  
-3. **Flash:**
-**SingleBoot:**
+3. **Flash**
+4.**SingleBoot:**
 fastboot erase dtbo_a
 fastboot erase dtbo_b
 fastboot flash boot_a boot-xiaomi-pipa.img
 fastboot flash boot_b boot-xiaomi-pipa.img
 fastboot flash userdata rootfs-xiaomi-pipa-plasma.img
-**DualBoot:**
+5.**DualBoot:**
 DualBoot Android and Linux on Mi Pad 6
 
 
