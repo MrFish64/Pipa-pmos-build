@@ -4,82 +4,95 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-image:
+  # ЗАДАНИЕ 1: СБОРКА KDE PLASMA
+  build-plasma:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
 
-      - name: Create workspace
-        run: mkdir out
-        
       - name: Install pmbootstrap
         run: |
           U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
           git clone --depth=1 "$U"
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Configure pmbootstrap
+      - name: Configure and Build Plasma
         run: |
-          WORK_DIR="/home/runner/pmb_work"
-          mkdir -p /home/runner/.config "$WORK_DIR"
+          mkdir -p /home/runner/.config /home/runner/pmb_work
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
           device = xiaomi-pipa
-          work = $WORK_DIR
+          work = /home/runner/pmb_work
           jobs = $(nproc)
           repository = edge
-          ui = console
+          ui = plasma-desktop
           systemd = never
-          
           [providers]
           firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
-          
-          [mirrors]
           EOF
-          yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
+          
+          PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg"
+          $PMB init || true
+          $PMB install --password 147147 --add postmarketos-ui-plasma-desktop,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,maliit-keyboard
+          $PMB export
+          mkdir -p out
+          cp /tmp/postmarketOS-export/boot.img out/boot-plasma.img
+          cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-plasma.img
 
-      - name: Build KDE Plasma
-        run: |
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
-           $PMB install --password 147147 \
-             --add postmarketos-ui-plasma-desktop \
-             --add device-xiaomi-pipa-nonfree-firmware \
-             --add msm-firmware-loader \
-             --add alsa-ucm-conf \
-             --add mesa-dri-gallium \
-             --add maliit-keyboard
-           
-           $PMB export
-           cp /tmp/postmarketOS-export/boot.img out/boot-plasma.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-plasma.img
-           
-           sudo rm -rf /tmp/postmarketOS-export/*
-           yes | $PMB zap
-
-      - name: Build GNOME Mobile
-        run: |
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
-           $PMB install --password 147147 \
-             --add postmarketos-ui-gnome-mobile \
-             --add device-xiaomi-pipa-nonfree-firmware \
-             --add msm-firmware-loader \
-             --add alsa-ucm-conf \
-             --add mesa-dri-gallium
-           
-           $PMB export
-           cp /tmp/postmarketOS-export/boot.img out/boot-gnome.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-gnome.img
-
-      - name: Upload artifacts
+      - name: Upload Plasma Artifacts
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-multi-ui-edge
+           name: xiaomi-pipa-plasma-edge
            path: out/*.img
-           retention-days: 7
+
+  # ЗАДАНИЕ 2: СБОРКА GNOME MOBILE
+  build-gnome:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
+
+      - name: Install pmbootstrap
+        run: |
+          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
+          git clone --depth=1 "$U"
+          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
+
+      - name: Configure and Build GNOME
+        run: |
+          mkdir -p /home/runner/.config /home/runner/pmb_work
+          cat <<EOF > /home/runner/.config/pmbootstrap.cfg
+          [pmbootstrap]
+          config_version = 3
+          device = xiaomi-pipa
+          work = /home/runner/pmb_work
+          jobs = $(nproc)
+          repository = edge
+          ui = gnome-mobile
+          systemd = never
+          [providers]
+          firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
+          EOF
+          
+          PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg"
+          $PMB init || true
+          $PMB install --password 147147 --add postmarketos-ui-gnome-mobile,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf
+          $PMB export
+          mkdir -p out
+          cp /tmp/postmarketOS-export/boot.img out/boot-gnome.img
+          cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-gnome.img
+
+      - name: Upload GNOME Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+           name: xiaomi-pipa-gnome-edge
+           path: out/*.img
            
