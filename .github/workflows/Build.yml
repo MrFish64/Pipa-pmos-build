@@ -12,13 +12,12 @@ jobs:
 
       - name: Install pmbootstrap
         run: |
-          U=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRPUy9wbWJvb3RzdHJhcC5naXQ=" | base64 -d)
-          git clone --depth=1 "$U"
-          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
+          git clone --depth=1 "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@://github.com" "$GITHUB_WORKSPACE/pmbootstrap"
+          chmod +x "$GITHUB_WORKSPACE/pmbootstrap/pmbootstrap.py"
+          echo "$GITHUB_WORKSPACE/pmbootstrap" >> $GITHUB_PATH
 
       - name: Setup Configuration
         run: |
-          # 1. Создаем ТОЛЬКО файл конфига, никаких папок заранее!
           mkdir -p $HOME/.config
           cat <<EOF > $HOME/.config/pmbootstrap.cfg
           [pmbootstrap]
@@ -33,13 +32,10 @@ jobs:
 
       - name: Build xiaomi-pipa
         run: |
-          # 2. Запускаем установку. pmbootstrap сам создаст $HOME/pmb_work и скачает порты
-          PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg"
+          PMB="python3 $GITHUB_WORKSPACE/pmbootstrap/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg"
           
-          # Инсталляция (скачает порты сама)
+          # Запуск сборки (pmbootstrap сам создаст папки и скачает порты)
           $PMB install --password 147147
-          
-          # Экспорт
           $PMB export
           
           mkdir -p out
@@ -55,7 +51,6 @@ jobs:
 
       - name: Copy and Upload kernel
         run: |
-           # Путь теперь $HOME/pmb_work/...
            cp $HOME/pmb_work/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
            
       - name: Upload kernel apk
