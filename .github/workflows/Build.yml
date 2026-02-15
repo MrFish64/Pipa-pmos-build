@@ -1,4 +1,4 @@
-name: Xiaomi Pad 6 Full Hardware Edge Build
+name: Build Xiaomi Pad 6 postmarketOS Edge
 on:
   push:
   workflow_dispatch:
@@ -7,14 +7,14 @@ jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Free Disk Space (20GB+)
+      - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
 
-      - name: Create artifact directory
+      - name: Create workspace
         run: mkdir out
         
       - name: Install pmbootstrap
@@ -23,21 +23,30 @@ jobs:
           git clone --depth=1 "$U"
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Force Official Init
+      - name: Configure pmbootstrap
         run: |
-          (echo "edge"; yes "") | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
-          PMB="python3 $PWD/pmbootstrap/pmbootstrap.py"
-          $PMB config device xiaomi-pipa
-          $PMB config jobs $(nproc)
-          $PMB config systemd never
-          # Добавляем non-free провайдера через sed
-          sed -i '/\[providers\]/a firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware' ~/.config/pmbootstrap.cfg
+          mkdir -p /home/runner/.config
+          cat <<EOF > /home/runner/.config/pmbootstrap.cfg
+          [pmbootstrap]
+          config_version = 3
+          device = xiaomi-pipa
+          work = /home/runner/.local/var/pmbootstrap
+          jobs = $(nproc)
+          repository = edge
+          ui = console
+          systemd = never
+          extra_packages = parted,cfdisk,gparted
+          
+          [providers]
+          firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
+          
+          [mirrors]
+          EOF
+          yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
 
-      - name: Build and Export Full Support Image
+      - name: Build system image
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y --details-to-stdout"
-           
-           # Полный набор для графики и железа
            $PMB install --password 147147 \
              --add postmarketos-ui-plasma-desktop \
              --add device-xiaomi-pipa-nonfree-firmware \
@@ -49,10 +58,10 @@ jobs:
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
 
-      - name: Upload Full Plasma Images
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-plasma-full-hardware
+           name: xiaomi-pipa-plasma-edge
            path: out/*.img
            retention-days: 7
            
