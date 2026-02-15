@@ -63,7 +63,7 @@ fastboot flash userdata rootfs-xiaomi-pipa-plasma.img
 
 | Job | Frequency | Status |
 |-----|----------|--------|
-| Image Builds | Every Friday | [![Build Status](https://github.com/MrFish64/Pipa-pmos-build/actions/workflows/build.yml/badge.svg)](https://github.com/MrFish64/Pipa-pmos-build/actions/workflows/build.yml)  |
+| Image Builds | Every Day| [![Build Status](https://github.com/MrFish64/Pipa-pmos-build/actions/workflows/build.yml/badge.svg)](https://github.com/MrFish64/Pipa-pmos-build/actions/workflows/build.yml)  |
 
 ---
 
