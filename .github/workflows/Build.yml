@@ -18,11 +18,8 @@ jobs:
         
       - name: Substitute placeholders and fix config
         run: |
-           # Удаляем старую версию и вставляем свежую ровно один раз, чтобы не было DuplicateOptionError
            sed -i '/config_version/d' xiaomi-pipa.cfg
            sed -i '/\[pmbootstrap\]/a config_version = 3' xiaomi-pipa.cfg
-           
-           # Меняем HOME и NPROC на реальные пути
            sed -i "s|HOME|$(echo $HOME)|g;s|NPROC|$(nproc)|g" xiaomi-pipa.cfg
 
       - name: Install pmbootstrap
@@ -31,26 +28,21 @@ jobs:
           git clone --depth=1 "$U"
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Set up official pmaports
+      - name: Prepare Workspace
         run: |
-          # Клонируем порты вручную в папку, которую ждет конфиг
-          mkdir -p $HOME/.local/var/pmbootstrap/cache_git
-          P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
-          git clone --depth=1 -b master "$P_URL" $HOME/.local/var/pmbootstrap/cache_git/pmaports
-          
-          # Устанавливаем исправленный конфиг как основной
           mkdir -p $HOME/.config
           cp xiaomi-pipa.cfg $HOME/.config/pmbootstrap.cfg
+          P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
+          git clone --depth=1 -b master "$P_URL" $HOME/pmaports_tmp
 
       - name: Build xiaomi-pipa
         run: |
-           # Глобальный флаг -y для автоматизации и -c для принудительного использования конфига
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg"
+           $PMB config work $HOME/pmb_work
+           mkdir -p $HOME/pmb_work/cache_git
+           mv $HOME/pmaports_tmp $HOME/pmb_work/cache_git/pmaports
            
-           # Сборка системы (теперь точно pipa, а не qemu)
            $PMB install --password 147147
-           
-           # Экспорт образов
            $PMB export
            
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
@@ -65,8 +57,7 @@ jobs:
 
       - name: Copy and Upload kernel
         run: |
-           # Копируем ядро из папки edge (так как мастер теперь там)
-           cp $HOME/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
+           cp $HOME/pmb_work/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
       
       - name: Upload kernel apk
         uses: actions/upload-artifact@v4
