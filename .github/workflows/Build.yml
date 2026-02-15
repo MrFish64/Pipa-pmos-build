@@ -16,33 +16,40 @@ jobs:
           git clone --depth=1 "$U"
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Setup Ports and Workspace
+      - name: Setup Workspace and Ports
         run: |
-          mkdir -p /home/runner/pmb_work/cache_git
-          P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
-          git clone --depth=1 -b master "$P_URL" /home/runner/pmb_work/cache_git/pmaports
+          # Создаем структуру папок, которую он требует по умолчанию
+          APORTS_DIR="$HOME/.local/var/pmbootstrap/cache_git/pmaports"
+          mkdir -p "$APORTS_DIR"
           
+          # Клонируем порты
+          P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
+          git clone --depth=1 -b master "$P_URL" "$APORTS_DIR"
+          
+          # Генерируем конфиг, который ТОЧНО совпадает с этими путями
           mkdir -p ~/.config
           cat <<EOF > ~/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
           device = xiaomi-pipa
-          work = /home/runner/pmb_work
-          aports = /home/runner/pmb_work/cache_git/pmaports
+          work = $HOME/.local/var/pmbootstrap
+          aports = $APORTS_DIR
           repository = edge
           jobs = $(nproc)
           mirror_alpine = http://dl-cdn.alpinelinux.org
+          ui = console
           EOF
 
       - name: Build xiaomi-pipa
         run: |
-           # Запуск с глобальным флагом -y
-           python3 $PWD/pmbootstrap/pmbootstrap.py -y install --password 147147
-           python3 $PWD/pmbootstrap/pmbootstrap.py -y export
-           
-           mkdir -p out
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
+          # Запускаем билд с форсированным путем к конфигу
+          PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c ~/.config/pmbootstrap.cfg"
+          $PMB install --password 147147
+          $PMB export
+          
+          mkdir -p out
+          cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
+          cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -53,7 +60,7 @@ jobs:
 
       - name: Copy and Upload kernel
         run: |
-           cp /home/runner/pmb_work/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
+           cp $HOME/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
            
       - name: Upload kernel apk
         uses: actions/upload-artifact@v4
