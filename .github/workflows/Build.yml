@@ -1,4 +1,4 @@
-name: Build Xiaomi Pad 6 postmarketOS Edge
+name: Build Xiaomi Pad 6 postmarketOS Plasma
 on:
   push:
   workflow_dispatch:
@@ -26,9 +26,7 @@ jobs:
       - name: Configure pmbootstrap
         run: |
           WORK_DIR="/home/runner/pmb_work"
-          mkdir -p /home/runner/.config
-          mkdir -p "$WORK_DIR"
-          
+          mkdir -p /home/runner/.config "$WORK_DIR"
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
@@ -36,16 +34,14 @@ jobs:
           work = $WORK_DIR
           jobs = $(nproc)
           repository = edge
-          ui = console
+          ui = plasma-desktop
           systemd = never
-          extra_packages = parted,cfdisk,gparted
           
           [providers]
           firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
           
           [mirrors]
           EOF
-          
           yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
 
       - name: Build system image
@@ -57,7 +53,8 @@ jobs:
              --add device-xiaomi-pipa-nonfree-firmware \
              --add msm-firmware-loader \
              --add alsa-ucm-conf \
-             --add mesa-dri-gallium
+             --add mesa-dri-gallium \
+             --add maliit-keyboard
            
            $PMB export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
