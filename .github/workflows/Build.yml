@@ -1,4 +1,4 @@
-name: Build Xiaomi Pad 6 postmarketOS Plasma
+name: Build Xiaomi Pad 6 postmarketOS Edge
 on:
   push:
   workflow_dispatch:
@@ -34,7 +34,6 @@ jobs:
           work = $WORK_DIR
           jobs = $(nproc)
           repository = edge
-          ui = plasma-desktop
           systemd = never
           
           [providers]
@@ -44,26 +43,29 @@ jobs:
           EOF
           yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
 
-      - name: Build system image
+      - name: Build KDE Plasma
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
-           
-           $PMB install --password 147147 \
-             --add postmarketos-ui-plasma-desktop \
-             --add device-xiaomi-pipa-nonfree-firmware \
-             --add msm-firmware-loader \
-             --add alsa-ucm-conf \
-             --add mesa-dri-gallium \
-             --add maliit-keyboard
-           
+           $PMB install --password 147147 --add postmarketos-ui-plasma-desktop,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,maliit-keyboard
            $PMB export
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
+           cp /tmp/postmarketOS-export/boot.img out/boot-plasma.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-plasma.img
+           # Очистка перед вторым билдом
+           sudo rm -rf /tmp/postmarketOS-export/*
+           yes | $PMB zap
 
-      - name: Upload artifacts
+      - name: Build GNOME Mobile
+        run: |
+           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
+           $PMB install --password 147147 --add postmarketos-ui-gnome-mobile,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf
+           $PMB export
+           cp /tmp/postmarketOS-export/boot.img out/boot-gnome.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-gnome.img
+
+      - name: Upload Images
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-plasma-edge
+           name: xiaomi-pipa-multi-ui
            path: out/*.img
            retention-days: 7
            
