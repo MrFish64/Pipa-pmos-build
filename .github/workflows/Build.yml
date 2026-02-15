@@ -20,6 +20,7 @@ jobs:
         
       - name: Substitute placeholders in configs
         run: |
+           # Патчим конфиг под 3.9.0 и подставляем пути
            sed -i '/\[pmbootstrap\]/a config_version = 3' xiaomi-pipa.cfg
            find . -type f -name "*.cfg" -exec sed -i "s|HOME|$(echo $HOME)|g;s|NPROC|$(nproc)|g" {} +
 
@@ -36,6 +37,7 @@ jobs:
         run: |
           mkdir -p ~/.config
           cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
+          # В 3.9.0 init без аргументов подхватит девайс из скопированного конфига
           yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
           
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
@@ -48,9 +50,9 @@ jobs:
         run: |
            mkdir -p ~/.config
            cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
-           # Добавил --device чтобы не собирал qemu
-           python3 "$PWD/pmbootstrap/pmbootstrap.py" install --device xiaomi-pipa --password 147147
-           python3 "$PWD/pmbootstrap/pmbootstrap.py" export --device xiaomi-pipa
+           # Убрал --device, теперь он берется из ~/.config/pmbootstrap.cfg
+           python3 "$PWD/pmbootstrap/pmbootstrap.py" install --password 147147
+           python3 "$PWD/pmbootstrap/pmbootstrap.py" export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
