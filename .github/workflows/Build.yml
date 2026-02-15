@@ -10,13 +10,11 @@ jobs:
       - name: Check out your repository
         uses: actions/checkout@v4
 
-      - name: Install pmbootstrap from GitLab
+      - name: Install pmbootstrap
         run: |
-          # Скачиваем архив мастера напрямую с Гитлаба
-          curl -L "https://gitlab.postmarketos.org" -o pmb.tar.gz
-          tar -xzf pmb.tar.gz
-          mv pmbootstrap-master pmbootstrap-repo
-          chmod +x pmbootstrap-repo/pmbootstrap.py
+          # Клонируем зеркало без лишних наворотов в папку pmb-repo
+          git clone --depth=1 https://github.com pmb-repo
+          chmod +x pmb-repo/pmbootstrap.py
 
       - name: Setup Configuration
         run: |
@@ -34,13 +32,11 @@ jobs:
 
       - name: Build xiaomi-pipa
         run: |
-          # Используем скачанный скрипт
-          PMB="python3 $GITHUB_WORKSPACE/pmbootstrap-repo/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg"
+          # Запуск сборки через скачанный скрипт
+          PMB="python3 $GITHUB_WORKSPACE/pmb-repo/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg"
           
-          # Установка (сама скачает порты в пустую папку pmb_work)
+          # Сама скачает порты и начнет билд
           $PMB install --password 147147
-          
-          # Экспорт образов
           $PMB export
           
           mkdir -p out
