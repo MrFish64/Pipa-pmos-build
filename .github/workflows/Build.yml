@@ -1,12 +1,16 @@
-name: Xiaomi Pad 6 postmarketOS Official Edge
+name: Xiaomi Pad 6 postmarketOS
 on:
-  push:
+  push: # Build when push
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * 5'
+    - cron: '0 0 * * 5' # Start build every friday
 
 jobs:
   build-image:
+    strategy:
+      matrix:
+        version: ["default"]
+
     runs-on: ubuntu-latest
     steps:
       - name: Check out build configurations
@@ -16,62 +20,111 @@ jobs:
         run: echo "CURRENT_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
         
       - name: Create artifact directory
-        run: mkdir out
+        run: |
+            mkdir out
         
       - name: Substitute placeholders in configs
         run: |
-           # Фикс для pmbootstrap 3.9.0
            sed -i '/\[pmbootstrap\]/a config_version = 3' xiaomi-pipa.cfg
-           find . -type f -name "*.cfg" -exec sed -i "s|HOME|$(echo $HOME)|g;s|NPROC|$(nproc)|g" {} +
+           find . -type f -name "*.cfg" -exec sed -i "s|HOME|$(echo $HOME)|;s|NPROC|$(nproc)|" {}           
 
       - name: Install pmbootstrap from git
         run: |
-          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
-          git clone --depth=1 "$U"
+          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git
           mkdir -p ~/.local/bin
           ln -s "$PWD/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
-          chmod +x "$PWD/pmbootstrap/pmbootstrap.py"
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          pmbootstrap --version
 
-      - name: Set up pmaports (OFFICIAL MASTER)
+      - name: Set up pmaports
         run: |
-          # Инициализируем структуру папок
-          python3 "$PWD/pmbootstrap/pmbootstrap.py" init --no-confirm || true
+          mkdir -p ~/.config
+          cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
+          echo -e 'edge\n\n\n\n\n\n\n\n\n' | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
-          
-          # ПЕРЕКЛЮЧАЕМСЯ НА САМЫЙ НОВЫЙ MASTER (EDGE)
           P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
           git remote set-url origin "$P_URL"
           git fetch origin master
           git reset --hard origin/master
+          
 
-      - name: Build the xiaomi-pipa (Edge)
+      - name: Build the xiaomi-pipa without DE
         run: |
-           mkdir -p ~/.config
            cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
-           # Билдим самую новую версию (Edge)
-           python3 "$PWD/pmbootstrap/pmbootstrap.py" install --password 147147
-           python3 "$PWD/pmbootstrap/pmbootstrap.py" export
+           pmbootstrap install --password 147147
+           pmbootstrap export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
-      - name: Upload artifacts
+      - name: Breakpoint if tests failed for xiaomi-pipa without DE
+        if: failure()
+        uses: namespacelabs/breakpoint-action@v0
+        with:
+          duration: 30m
+          authorized-users: rifux
+      
+      - name: Upload artifacts xiaomi-pipa without DE
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-edge_${{ env.CURRENT_DATE }}
+           name: xiaomi-pipa-none_${{ env.CURRENT_DATE }}
+           path: out/*.img*
+           retention-days: 7
+
+      - name: Build the xiaomi-pipa with KDE Plasma Desktop
+        run: |
+           yes | pmbootstrap zap
+           rm -r out/*
+           pmbootstrap install --password 147147 --add postmarketos-ui-plasma-desktop
+           cat /home/runner/.local/var/pmbootstrap/log.txt
+           pmbootstrap export
+           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
+
+      - name: Breakpoint if tests failed for xiaomi-pipa with KDE Plasma Desktop
+        if: failure()
+        uses: namespacelabs/breakpoint-action@v0
+        with:
+          duration: 30m
+          authorized-users: rifux
+      
+      - name: Upload artifacts xiaomi-pipa with KDE Plasma Desktop
+        uses: actions/upload-artifact@v4
+        with:
+           name: xiaomi-pipa-plasma_${{ env.CURRENT_DATE }}
+           path: out/*.img*
+           retention-days: 7
+            
+      - name: Build the xiaomi-pipa with GNOME
+        run: |
+           yes | pmbootstrap zap
+           rm -r out/*
+           pmbootstrap install --password 147147 --add postmarketos-ui-gnome
+           pmbootstrap export
+           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-gnome.img
+
+      - name: Breakpoint if tests failed for xiaomi-pipa with GNOME
+        if: failure()
+        uses: namespacelabs/breakpoint-action@v0
+        with:
+          duration: 30m
+          authorized-users: rifux
+            
+      - name: Upload artifacts xiaomi-pipa with GNOME
+        uses: actions/upload-artifact@v4
+        with:
+           name: xiaomi-pipa-gnome_${{ env.CURRENT_DATE }}
            path: out/*.img*
            retention-days: 7
                        
-      - name: Copy xiaomi-pipa kernel (Edge)
+      - name: Copy xiaomi-pipa kernel
         run: |
-           rm -f out/*
-           # В ветке master пакеты лежат в папке edge
+           rm -r out/*
            cp ~/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
+           
       
-      - name: Upload artifacts kernel
+      - name: Upload artifacts xiaomi-pipa kernel
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-kernel-edge_${{ env.CURRENT_DATE }}
+           name: xiaomi-pipa-kernel_${{ env.CURRENT_DATE }}
            path: out/*.apk
            retention-days: 7
-           
