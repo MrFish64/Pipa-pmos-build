@@ -1,4 +1,4 @@
-name: Xiaomi Pad 6 Official Edge Build (Plasma)
+name: Xiaomi Pad 6 Full Hardware Edge Build
 on:
   push:
   workflow_dispatch:
@@ -28,32 +28,38 @@ jobs:
 
       - name: Force Official Init
         run: |
+          # Выбираем edge и разрешаем проприетарные прошивки (non-free)
           (echo "edge"; yes "") | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
+          
           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py"
           $PMB config device xiaomi-pipa
-          $PMB config extra_packages parted,cfdisk,gparted
           $PMB config jobs $(nproc)
           $PMB config systemd never
+          # ВКЛЮЧАЕМ NON-FREE
+          $PMB config providers "{"firmware-xiaomi-pipa":"device-xiaomi-pipa-nonfree-firmware"}"
 
-      - name: Build and Export Split Images
+      - name: Build and Export Full Support Image
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y --details-to-stdout"
            
-           # Сборка Plasma
-           $PMB install --password 147147 --add postmarketos-ui-plasma-desktop
+           # Пакеты для GPU (mesa), Звука (alsa), Тача и Сенсоров (firmware)
+           $PMB install --password 147147 \
+             --add postmarketos-ui-plasma-desktop \
+             --add device-xiaomi-pipa-nonfree-firmware \
+             --add msm-firmware-loader \
+             --add alsa-ucm-conf \
+             --add mesa-dri-gallium \
+             --add xf86-video-freedreno
            
-           # ЭКСПОРТ ДЛЯ FASTBOOT (создает раздельные boot.img и rootfs)
            $PMB export
            
-           # Копируем ОБА файла из временной папки экспорта
-           # В новых версиях они лежат как boot.img и xiaomi-pipa.img
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
 
-      - name: Upload Plasma Images
+      - name: Upload Full Plasma Images
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-plasma-bundle
+           name: xiaomi-pipa-plasma-full-hardware
            path: out/*.img
            retention-days: 7
            
