@@ -45,12 +45,20 @@ GitHub Actions Artifacts
 1. **Download** your preferred image from the Actions tab  
 2. **Extract** the ZIP archive  
 3. **Flash**
+
+
+
+
 **Singleboot(Only Linux)**
 fastboot erase dtbo_a
 fastboot erase dtbo_b
 fastboot flash boot_a boot-xiaomi-pipa.img
 fastboot flash boot_b boot-xiaomi-pipa.img
 fastboot flash userdata rootfs-xiaomi-pipa-plasma.img
+
+
+
+
 **Dualboot Android and Linux**
 First flash the correct fastboot rom wia fastboot (wipe the storage and Do not lock the bootloader)
 
