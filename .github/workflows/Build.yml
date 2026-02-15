@@ -12,25 +12,19 @@ jobs:
 
       - name: Install pmbootstrap
         run: |
-          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
+          U=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRPUy9wbWJvb3RzdHJhcC5naXQ=" | base64 -d)
           git clone --depth=1 "$U"
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Setup Workspace and Ports
+      - name: Setup Configuration
         run: |
-          APORTS_DIR="$HOME/.local/var/pmbootstrap/cache_git/pmaports"
-          mkdir -p "$APORTS_DIR"
-          
-          P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
-          git clone --depth=1 -b master "$P_URL" "$APORTS_DIR"
-          
+          # 1. Создаем ТОЛЬКО файл конфига, никаких папок заранее!
           mkdir -p $HOME/.config
           cat <<EOF > $HOME/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
           device = xiaomi-pipa
-          work = $HOME/.local/var/pmbootstrap
-          aports = $APORTS_DIR
+          work = $HOME/pmb_work
           repository = edge
           jobs = $(nproc)
           mirror_alpine = http://dl-cdn.alpinelinux.org
@@ -39,9 +33,14 @@ jobs:
 
       - name: Build xiaomi-pipa
         run: |
-          # Указываем прямой путь к конфигу через переменную окружения
-          python3 $PWD/pmbootstrap/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg install --password 147147
-          python3 $PWD/pmbootstrap/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg export
+          # 2. Запускаем установку. pmbootstrap сам создаст $HOME/pmb_work и скачает порты
+          PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg"
+          
+          # Инсталляция (скачает порты сама)
+          $PMB install --password 147147
+          
+          # Экспорт
+          $PMB export
           
           mkdir -p out
           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
@@ -56,7 +55,8 @@ jobs:
 
       - name: Copy and Upload kernel
         run: |
-           cp $HOME/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
+           # Путь теперь $HOME/pmb_work/...
+           cp $HOME/pmb_work/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
            
       - name: Upload kernel apk
         uses: actions/upload-artifact@v4
