@@ -50,7 +50,6 @@ jobs:
           systemd = never
           
           [providers]
-          firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
           
           [mirrors]
           EOF
