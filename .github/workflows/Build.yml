@@ -25,12 +25,15 @@ jobs:
 
       - name: Configure pmbootstrap
         run: |
+          WORK_DIR="/home/runner/pmb_work"
           mkdir -p /home/runner/.config
+          mkdir -p "$WORK_DIR"
+          
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
           device = xiaomi-pipa
-          work = /home/runner/.local/var/pmbootstrap
+          work = $WORK_DIR
           jobs = $(nproc)
           repository = edge
           ui = console
@@ -42,11 +45,13 @@ jobs:
           
           [mirrors]
           EOF
-          yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
+          
+          yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
 
       - name: Build system image
         run: |
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y --details-to-stdout"
+           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
+           
            $PMB install --password 147147 \
              --add postmarketos-ui-plasma-desktop \
              --add device-xiaomi-pipa-nonfree-firmware \
