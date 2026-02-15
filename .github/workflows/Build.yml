@@ -6,18 +6,7 @@ on:
 jobs:
   build-image:
     runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
     steps:
-      - name: Cleanup Workflow History
-        uses: Matt-Gleich/delete-older-runs@v3.1.0
-        with:
-          repo: ${{ github.repository }}
-          threshold: '1 second' # Удалит всё, что создано раньше текущего момента
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
