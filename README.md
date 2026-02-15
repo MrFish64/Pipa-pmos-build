@@ -44,22 +44,16 @@ GitHub Actions Artifacts
 
 1. **Download** your preferred image from the Actions tab  
 2. **Extract** the ZIP archive  
-3. **Flash**
-
-
-
-
-**Singleboot(Only Linux)**
+3. **Flash Singleboot(only Linux)**
+```
 fastboot erase dtbo_a
 fastboot erase dtbo_b
 fastboot flash boot_a boot-xiaomi-pipa.img
 fastboot flash boot_b boot-xiaomi-pipa.img
 fastboot flash userdata rootfs-xiaomi-pipa-plasma.img
-
-
-
-
-**Dualboot Android and Linux**
+```
+**Flash Dualboot (Android and Linux)**
+```
 First flash the correct fastboot rom wia fastboot (wipe the storage and Do not lock the bootloader)
 
 boot once to check if android works fine
@@ -75,7 +69,7 @@ sudo fastboot flash super <path to the larger .img>
 reboot to pmos with 
 sudo fastboot reboot
 after booting up , 
-login (password is 123)
+login (password is 147147)
 connect to wifi
 open terminal and run
 sudo apk update
@@ -96,7 +90,7 @@ apply changes and verify them by opening and closing gparted
 
 finally poweroff your tablet and hold volume keys to put it in fast boot mode
 
-flash the fastboot rom again (flash_all.sh , wipe userdata too, don't lock the bootloader)
+flash the fastboot rom again (flash_all.bat , wipe userdata too, don't lock the bootloader)
 turn on android and there should be some storage gone , reserved as "system"
 
 reboot back to bootloader 
@@ -124,6 +118,7 @@ fastboot set_active b
 
 4. **Reboot**
 5. **Enjoy** postmarketOS on your Xiaomi Pad 6!
+```
 
 ---
 
