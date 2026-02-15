@@ -10,11 +10,10 @@
 
 - **Supported Desktop Environments**  
   * KDE Plasma Desktop  
-  * GNOME Shell
-  * Minimal base system (no DE)
+  * GNOME Shell(soon)
 
 - **Automated Builds**  
-  ✅ Weekly builds every Friday (UTC)  
+  ✅ Builds every day (UTC)  
   ✅ Kernel packages included  
   ✅ Verified device support
 
