@@ -33,15 +33,18 @@ jobs:
 
       - name: Initialize workspace
         run: |
-          WORK_DIR="/home/runner/.local/var/pmbootstrap"
-          mkdir -p "$WORK_DIR/cache_git" ~/.config
+          WORK_DIR="/home/runner/pmb_work"
+          mkdir -p "$WORK_DIR/cache_git"
           
+          # Клонируем порты вручную в наш воркспейс
           P=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
           git clone --depth=1 -b master "$P" "$WORK_DIR/cache_git/pmaports"
           
+          # Устанавливаем версию воркспейса для обхода миграции
           echo "8" > "$WORK_DIR/version"
           
-          cat <<EOF > ~/.config/pmbootstrap.cfg
+          # Создаем эталонный конфиг v3.9.0 в корне
+          cat <<EOF > /home/runner/work_config.cfg
           [pmbootstrap]
           config_version = 3
           device = xiaomi-pipa
@@ -58,13 +61,18 @@ jobs:
 
       - name: Build system image
         run: |
-          PMB="python3 pmb/pmbootstrap.py -y"
+          # Использование флага -c принудительно активирует наш конфиг
+          PMB="python3 pmb/pmbootstrap.py -y -c /home/runner/work_config.cfg"
+          
+          # Набор пакетов для полной поддержки железа
           EXTRA="device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,mesa-dri-gallium"
           [ "${{ matrix.ui }}" == "plasma-desktop" ] && EXTRA="$EXTRA,maliit-keyboard"
           
+          # Старт сборки и экспорта
           $PMB install --password 147147 --add "$EXTRA"
           $PMB export --type fastboot
           
+          # Подготовка релизных архивов в формате ZSTD
           mkdir -p release
           tar -c --zstd -f release/pipa-${{ matrix.ui }}-boot.img.tar.zst -C /tmp/postmarketOS-export/ boot.img
           tar -c --zstd -f release/pipa-${{ matrix.ui }}-rootfs.img.tar.zst -C /tmp/postmarketOS-export/ xiaomi-pipa.img
