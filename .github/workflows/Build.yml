@@ -20,11 +20,13 @@ jobs:
         
       - name: Substitute placeholders in configs
         run: |
+           # ПРАВКА 1: Исправляем конфиг под версию 3.9.0
            sed -i '/\[pmbootstrap\]/a config_version = 3' xiaomi-pipa.cfg
            find . -type f -name "*.cfg" -exec sed -i "s|HOME|$(echo $HOME)|;s|NPROC|$(nproc)|" {} +
 
-      - name: Install pmbootstrap from git
+      - name: Install pmbootstrap
         run: |
+          # ПРАВКА 2: Полная ссылка через Base64, чтобы ничего не обрезалось
           U=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRPUy9wbWJvb3RzdHJhcC5naXQ=" | base64 -d)
           git clone --depth=1 "$U"
           mkdir -p ~/.local/bin
@@ -32,11 +34,12 @@ jobs:
           chmod +x "$PWD/pmbootstrap/pmbootstrap.py"
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Set up pmaports (Official Edge)
+      - name: Set up pmaports
         run: |
+          # ПРАВКА 3: Новое имя конфига и официальный Edge (Master)
           mkdir -p ~/.config
           cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
-          echo -e 'edge\n\n\n\n\n\n\n\n\n\n' | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
+          echo -e '\n\n\n\n\n\n\n\n\n' | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
           
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
           P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
@@ -44,7 +47,7 @@ jobs:
           git fetch origin master
           git reset --hard origin/master
 
-      - name: Build the xiaomi-pipa without DE
+      - name: Build the xiaomi-pipa
         run: |
            mkdir -p ~/.config
            cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
@@ -53,16 +56,10 @@ jobs:
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
-      - name: Upload artifacts xiaomi-pipa without DE
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-none_${{ env.CURRENT_DATE }}
-           path: out/*.img*
-           retention-days: 7
-                       
       - name: Copy xiaomi-pipa kernel
         run: |
            rm -f out/*
+           # ПРАВКА 4: Берем из папки edge (т.к. мастер теперь там)
            cp ~/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
       
       - name: Upload artifacts xiaomi-pipa kernel
