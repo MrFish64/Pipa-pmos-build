@@ -7,7 +7,7 @@ jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out build configurations
+      - name: Check out
         uses: actions/checkout@v4
 
       - name: Set current date variable
@@ -28,7 +28,7 @@ jobs:
           git clone --depth=1 "$U"
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Prepare Workspace
+      - name: Prepare Ports
         run: |
           mkdir -p $HOME/.config
           cp xiaomi-pipa.cfg $HOME/.config/pmbootstrap.cfg
@@ -38,9 +38,11 @@ jobs:
       - name: Build xiaomi-pipa
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg"
-           $PMB config work $HOME/pmb_work
            mkdir -p $HOME/pmb_work/cache_git
+           mkdir -p $HOME/pmb_work/chroot_native
+           mkdir -p $HOME/pmb_work/packages
            mv $HOME/pmaports_tmp $HOME/pmb_work/cache_git/pmaports
+           $PMB config work $HOME/pmb_work
            
            $PMB install --password 147147
            $PMB export
@@ -53,16 +55,5 @@ jobs:
         with:
            name: xiaomi-pipa-none_${{ env.CURRENT_DATE }}
            path: out/*.img*
-           retention-days: 7
-
-      - name: Copy and Upload kernel
-        run: |
-           cp $HOME/pmb_work/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
-      
-      - name: Upload kernel apk
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-kernel_${{ env.CURRENT_DATE }}
-           path: out/*.apk
            retention-days: 7
            
