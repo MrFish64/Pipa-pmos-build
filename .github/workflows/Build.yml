@@ -21,20 +21,33 @@ jobs:
 
       - name: Force Official Init
         run: |
-          # Используем yes "" чтобы отвечать Enter на ЛЮБОЕ количество вопросов
-          yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
+          # Выбираем edge и жмем Enter до победного
+          (echo "edge"; yes "") | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
           
-          # Теперь ПРИНУДИТЕЛЬНО меняем девайс и параметры в созданном конфиге
           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py"
           $PMB config device xiaomi-pipa
           $PMB config extra_packages parted,cfdisk,gparted
           $PMB config jobs $(nproc)
           $PMB config systemd never
-          $PMB config repository edge
-          
-          # Проверка: что в итоге записалось в конфиг
-          $PMB config device
 
+      - name: Build xiaomi-pipa
+        run: |
+           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y"
+           
+           # Сборка системы
+           $PMB install --password 147147
+           $PMB export
+           
+           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+           name: xiaomi-pipa-none
+           path: out/*.img*
+           retention-days: 7
+           
       - name: Build xiaomi-pipa
         run: |
            # Запускаем билд. Теперь у него есть официальный воркспейс.
