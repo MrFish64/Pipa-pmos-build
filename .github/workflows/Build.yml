@@ -4,9 +4,6 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -33,18 +30,15 @@ jobs:
 
       - name: Initialize workspace
         run: |
-          WORK_DIR="/home/runner/pmb_work"
-          mkdir -p "$WORK_DIR/cache_git"
+          WORK_DIR="/home/runner/.local/var/pmbootstrap"
+          mkdir -p "$WORK_DIR/cache_git" /home/runner/.config
           
-          # Клонируем порты вручную в наш воркспейс
           P=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
           git clone --depth=1 -b master "$P" "$WORK_DIR/cache_git/pmaports"
           
-          # Устанавливаем версию воркспейса для обхода миграции
           echo "8" > "$WORK_DIR/version"
           
-          # Создаем эталонный конфиг v3.9.0 в корне
-          cat <<EOF > /home/runner/work_config.cfg
+          cat <<EOF > /home/runner/pmb.cfg
           [pmbootstrap]
           config_version = 3
           device = xiaomi-pipa
@@ -57,41 +51,30 @@ jobs:
           
           [providers]
           firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
+          
+          [mirrors]
           EOF
+          
+          cp /home/runner/pmb.cfg /home/runner/.config/pmbootstrap.cfg
 
       - name: Build system image
         run: |
-          # Использование флага -c принудительно активирует наш конфиг
-          PMB="python3 pmb/pmbootstrap.py -y -c /home/runner/work_config.cfg"
+          PMB="python3 pmb/pmbootstrap.py -y -c /home/runner/pmb.cfg"
           
-          # Набор пакетов для полной поддержки железа
           EXTRA="device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,mesa-dri-gallium"
           [ "${{ matrix.ui }}" == "plasma-desktop" ] && EXTRA="$EXTRA,maliit-keyboard"
           
-          # Старт сборки и экспорта
           $PMB install --password 147147 --add "$EXTRA"
           $PMB export --type fastboot
           
-          # Подготовка релизных архивов в формате ZSTD
-          mkdir -p release
-          tar -c --zstd -f release/pipa-${{ matrix.ui }}-boot.img.tar.zst -C /tmp/postmarketOS-export/ boot.img
-          tar -c --zstd -f release/pipa-${{ matrix.ui }}-rootfs.img.tar.zst -C /tmp/postmarketOS-export/ xiaomi-pipa.img
+          mkdir -p out
+          cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
+          cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-${{ matrix.ui }}.img
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: "release-${{ github.run_id }}"
-          name: "Xiaomi Pad 6 (pipa) Build $(date +'%Y-%m-%d')"
-          body: |
-            ### postmarketOS for Xiaomi Pad 6 (pipa)
-            
-            - **UI**: `${{ matrix.ui }}`
-            - **Channel**: `Edge`
-            - **Credentials**: `user` / `147147`
-            
-            **Installation:**
-            1. Extract `.tar.zst` archives.
-            2. `fastboot flash boot boot.img`
-            3. `fastboot flash userdata xiaomi-pipa.img`
-          files: release/*
+          name: xiaomi-pipa-${{ matrix.ui }}
+          path: out/*.img
+          retention-days: 7
           
