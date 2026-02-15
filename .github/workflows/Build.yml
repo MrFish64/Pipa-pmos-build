@@ -18,17 +18,14 @@ jobs:
 
       - name: Setup Workspace and Ports
         run: |
-          # Создаем структуру папок, которую он требует по умолчанию
           APORTS_DIR="$HOME/.local/var/pmbootstrap/cache_git/pmaports"
           mkdir -p "$APORTS_DIR"
           
-          # Клонируем порты
           P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
           git clone --depth=1 -b master "$P_URL" "$APORTS_DIR"
           
-          # Генерируем конфиг, который ТОЧНО совпадает с этими путями
-          mkdir -p ~/.config
-          cat <<EOF > ~/.config/pmbootstrap.cfg
+          mkdir -p $HOME/.config
+          cat <<EOF > $HOME/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
           device = xiaomi-pipa
@@ -42,10 +39,9 @@ jobs:
 
       - name: Build xiaomi-pipa
         run: |
-          # Запускаем билд с форсированным путем к конфигу
-          PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c ~/.config/pmbootstrap.cfg"
-          $PMB install --password 147147
-          $PMB export
+          # Указываем прямой путь к конфигу через переменную окружения
+          python3 $PWD/pmbootstrap/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg install --password 147147
+          python3 $PWD/pmbootstrap/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg export
           
           mkdir -p out
           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
