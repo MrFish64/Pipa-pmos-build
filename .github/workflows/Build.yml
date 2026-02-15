@@ -4,6 +4,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,59 +20,66 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Cleanup Environment
+      - name: Maximize disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
-          df -h
+          sudo docker image prune --all --force
 
-      - name: Setup pmbootstrap
+      - name: Install pmbootstrap
         run: |
           U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
           git clone --depth=1 "$U" pmb
           echo "$PWD/pmb" >> $GITHUB_PATH
 
-      - name: Initialize Workspace
+      - name: Initialize workspace
         run: |
           WORK_DIR="/home/runner/.local/var/pmbootstrap"
-          mkdir -p "$WORK_DIR/cache_git"
-          mkdir -p ~/.config
-
+          mkdir -p "$WORK_DIR/cache_git" ~/.config
           P=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
           git clone --depth=1 -b master "$P" "$WORK_DIR/cache_git/pmaports"
-
-          echo "8" > "$WORK_DIR/version"
-
-          cat <<EOF > ~/.config/pmbootstrap.cfg
-          [pmbootstrap]
-          config_version = 3
-          device = xiaomi-pipa
-          work = $WORK_DIR
-          jobs = $(nproc)
-          repository = edge
-          ui = ${{ matrix.ui }}
-          systemd = never
           
-          [providers]
-          firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
+          python3 pmb/pmbootstrap.py init <<EOF
+          edge
+          xiaomi
+          pipa
+          ${{ matrix.ui }}
+          user
+          147147
           EOF
+          
+          PMB="python3 pmb/pmbootstrap.py"
+          $PMB config extra_packages parted,cfdisk,gparted,zstd
+          $PMB config systemd never
+          $PMB config jobs $(nproc)
+          sed -i '/\[providers\]/a firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware' ~/.config/pmbootstrap.cfg
 
-      - name: Build System Image
+      - name: Build and export
         run: |
           PMB="python3 pmb/pmbootstrap.py -y"
           EXTRA="device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,mesa-dri-gallium"
           [ "${{ matrix.ui }}" == "plasma-desktop" ] && EXTRA="$EXTRA,maliit-keyboard"
           
           $PMB install --password 147147 --add "$EXTRA"
-          $PMB export
+          $PMB export --type fastboot
           
-          mkdir -p out
-          cp /tmp/postmarketOS-export/boot.img out/boot-${{ matrix.ui }}.img
-          cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-${{ matrix.ui }}.img
+          mkdir -p release
+          tar -c --zstd -f release/pipa-${{ matrix.ui }}-boot.img.tar.zst -C /tmp/postmarketOS-export/ boot.img
+          tar -c --zstd -f release/pipa-${{ matrix.ui }}-rootfs.img.tar.zst -C /tmp/postmarketOS-export/ xiaomi-pipa.img
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: pipa-${{ matrix.ui }}
-          path: out/*.img
-          retention-days: 5
+          tag_name: build-${{ github.run_id }}
+          name: "Xiaomi Pad 6 (pipa) - $(date +'%Y-%m-%d')"
+          body: |
+            ### 🚀 Official postmarketOS Build for Pipa
+            - **Branch**: Edge
+            - **UI**: ${{ matrix.ui }}
+            - **Credentials**: `user` / `147147`
+            
+            ### 🛠️ Flash Guide:
+            1. Extract `.tar.zst` files
+            2. `fastboot flash boot boot.img`
+            3. `fastboot flash userdata xiaomi-pipa.img`
+          files: release/*
           
