@@ -36,12 +36,7 @@ GitHub Actions Artifacts
   
 1. Visit our [Actions tab](https://github.com/MrFish64/Pipa-pmos-build/actions)   
 2. Look for the latest workflow run (marked with 🟢)  
-3. Download the desired image:
-  - `xiaomi-pipa-none_*.zip` (minimal system)
-  - `xiaomi-pipa-plasma_*.zip` (KDE Plasma)
-  - `xiaomi-pipa-gnome_*.zip` (GNOME Shell)
-  - `xiaomi-pipa-kernel_*.zip` (kernel packages)
-  
+3. Download the zip archive  
 *Note:* GitHub account required for downloads
 
 ---
@@ -57,7 +52,7 @@ fastboot erase dtbo_a
 fastboot erase dtbo_b
 fastboot flash boot_a boot-xiaomi-pipa.img
 fastboot flash boot_b boot-xiaomi-pipa.img
-fastboot flash userdata rootfs-xiaomi-pipa-gnome.img
+fastboot flash userdata rootfs-xiaomi-pipa-plasma.img
 ```
 
 4. **Reboot**
