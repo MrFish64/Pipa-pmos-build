@@ -35,37 +35,25 @@ jobs:
           $PMB config jobs $(nproc)
           $PMB config systemd never
 
-      - name: Build and Export (Split Images)
+      - name: Build and Export Split Images
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y --details-to-stdout"
            
            # Сборка Plasma
            $PMB install --password 147147 --add postmarketos-ui-plasma-desktop
            
-           # Экспорт раздельных файлов (boot и rootfs)
+           # ЭКСПОРТ ДЛЯ FASTBOOT (создает раздельные boot.img и rootfs)
            $PMB export
            
-           # Копируем ОБА образа. boot.img всегда создается отдельно при экспорте.
+           # Копируем ОБА файла из временной папки экспорта
+           # В новых версиях они лежат как boot.img и xiaomi-pipa.img
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
 
-      - name: Copy Kernel APK
-        run: |
-           WORK_PATH=$(python3 ./pmbootstrap/pmbootstrap.py config work)
-           # Ищем apk ядра по маске и копируем в out
-           find "$WORK_PATH/packages" -name "linux-postmarketos-qcom-sm8250*.apk" -exec cp {} out/ \;
-
-      - name: Upload Images
+      - name: Upload Plasma Images
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-plasma-images
+           name: xiaomi-pipa-plasma-bundle
            path: out/*.img
-           retention-days: 7
-
-      - name: Upload Kernel APK
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-kernel-apk
-           path: out/*.apk
            retention-days: 7
            
