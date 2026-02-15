@@ -10,39 +10,42 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
-      - name: Create artifact directory
-        run: mkdir out
-        
       - name: Install pmbootstrap
         run: |
-          # Ссылка зашифрована, чтобы Хром не откусил хвост
           U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
           git clone --depth=1 "$U"
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Force Init Config (3.9.0 style)
+      - name: Setup Config (Force 3.9.0)
         run: |
-          # Заставляем pmbootstrap создать ИДЕАЛЬНЫЙ конфиг 3.0+
-          # Ответы: канал(edge), майнтейнер(user), остальное - по дефолту (Enter)
-          echo -e "edge\nuser\n\n\n\n\n\n\n\n\n\n\n\n\n" | python3 "$PWD/pmbootstrap/pmbootstrap.py" init
+          # 1. Создаем скелет конфига
+          mkdir -p ~/.config
+          echo "[pmbootstrap]" > ~/.config/pmbootstrap.cfg
+          echo "config_version = 3" >> ~/.config/pmbootstrap.cfg
           
-          # Точечно настраиваем твою pipa через официальные команды
+          # 2. Настраиваем всё принудительно через config (без init)
           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py"
+          $PMB config work /home/runner/pmb_work
           $PMB config device xiaomi-pipa
-          $PMB config extra_packages parted,cfdisk,gparted
+          $PMB config repository edge
+          $PMB config ui console
+          $PMB config systemd never
           $PMB config jobs $(nproc)
-          
-          # Клонируем официальные порты (там уже есть pipa в testing)
+          $PMB config extra_packages parted,cfdisk,gparted
+
+      - name: Clone official pmaports
+        run: |
+          # Качаем порты в папку, которую прописали в конфиге
           P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
-          APORTS_DIR=$($PMB config aports)
-          rm -rf "$APORTS_DIR"
-          git clone --depth=1 -b master "$P_URL" "$APORTS_DIR"
+          mkdir -p /home/runner/pmb_work/cache_git
+          git clone --depth=1 -b master "$P_URL" /home/runner/pmb_work/cache_git/pmaports
 
       - name: Build xiaomi-pipa
         run: |
-           # Запускаем билд на чистом конфиге, который создала сама программа
+           # Запускаем билд. Теперь он точно знает, что это pipa, а не qemu
            python3 ./pmbootstrap/pmbootstrap.py install --password 147147
            python3 ./pmbootstrap/pmbootstrap.py export
+           mkdir -p out
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
@@ -55,10 +58,9 @@ jobs:
 
       - name: Copy and Upload kernel
         run: |
-           W=$(python3 ./pmbootstrap/pmbootstrap.py config work)
-           cp $W/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
-      
-      - name: Upload kernel
+           cp /home/runner/pmb_work/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
+           
+      - name: Upload kernel apk
         uses: actions/upload-artifact@v4
         with:
            name: xiaomi-pipa-kernel
