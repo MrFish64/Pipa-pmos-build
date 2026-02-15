@@ -22,7 +22,6 @@ jobs:
           P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
           git clone --depth=1 -b master "$P_URL" /home/runner/pmb_work/cache_git/pmaports
           
-          # Нам всё равно нужен минимальный конфиг, чтобы pmbootstrap знал девайс
           mkdir -p ~/.config
           cat <<EOF > ~/.config/pmbootstrap.cfg
           [pmbootstrap]
@@ -32,13 +31,14 @@ jobs:
           aports = /home/runner/pmb_work/cache_git/pmaports
           repository = edge
           jobs = $(nproc)
+          mirror_alpine = http://dl-cdn.alpinelinux.org
           EOF
 
       - name: Build xiaomi-pipa
         run: |
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py"
-           $PMB install -y --password 147147
-           $PMB export
+           # Запуск с глобальным флагом -y
+           python3 $PWD/pmbootstrap/pmbootstrap.py -y install --password 147147
+           python3 $PWD/pmbootstrap/pmbootstrap.py -y export
            
            mkdir -p out
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
