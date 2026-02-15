@@ -10,6 +10,13 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
+      - name: Free Disk Space (20GB+)
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
       - name: Create artifact directory
         run: mkdir out
         
@@ -21,9 +28,10 @@ jobs:
 
       - name: Force Official Init
         run: |
-          # Выбираем edge и жмем Enter до победного
+          # Авто-ответы для 3.9.0 (выбираем edge и жмем Enter)
           (echo "edge"; yes "") | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
           
+          # Жесткая настройка под pipa
           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py"
           $PMB config device xiaomi-pipa
           $PMB config extra_packages parted,cfdisk,gparted
@@ -32,10 +40,13 @@ jobs:
 
       - name: Build xiaomi-pipa
         run: |
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y"
+           # --details-to-stdout покажет КОРЕНЬ ошибки, если билд упадет
+           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y --details-to-stdout"
            
            # Сборка системы
            $PMB install --password 147147
+           
+           # Экспорт образов
            $PMB export
            
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
@@ -47,22 +58,15 @@ jobs:
            name: xiaomi-pipa-none
            path: out/*.img*
            retention-days: 7
-           
-      - name: Build xiaomi-pipa
+
+      - name: Copy and Upload kernel
         run: |
-           # Запускаем билд. Теперь у него есть официальный воркспейс.
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y"
-           
-           $PMB install --password 147147
-           $PMB export
-           
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
-
-      - name: Upload artifacts
+           W=$(python3 ./pmbootstrap/pmbootstrap.py config work)
+           cp $W/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || true
+      
+      - name: Upload kernel
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-none
-           path: out/*.img*
-           retention-days: 7
+           name: xiaomi-pipa-kernel
+           path: out/*.apk
            
