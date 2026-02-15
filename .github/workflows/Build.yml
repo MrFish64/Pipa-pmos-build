@@ -6,7 +6,18 @@ on:
 jobs:
   build-image:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
+      - name: Cleanup Workflow History
+        uses: Mattraiano/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 0
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -25,43 +36,61 @@ jobs:
 
       - name: Configure pmbootstrap
         run: |
-          # Чистый init для создания структуры
-          (echo "edge"; yes "") | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
+          WORK_DIR="/home/runner/pmb_work"
+          mkdir -p /home/runner/.config "$WORK_DIR"
+          cat <<EOF > /home/runner/.config/pmbootstrap.cfg
+          [pmbootstrap]
+          config_version = 3
+          device = xiaomi-pipa
+          work = $WORK_DIR
+          jobs = $(nproc)
+          repository = edge
+          ui = console
+          systemd = never
           
-          # Жесткая настройка через официальные команды
-          PMB="python3 $PWD/pmbootstrap/pmbootstrap.py"
-          $PMB config device xiaomi-pipa
-          $PMB config jobs $(nproc)
-          $PMB config systemd never
+          [providers]
+          firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
           
-          # Прописываем non-free провайдера (исправленный синтаксис для 3.9.0)
-          sed -i '/\[providers\]/a firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware' ~/.config/pmbootstrap.cfg
+          [mirrors]
+          EOF
+          yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
 
       - name: Build KDE Plasma
         run: |
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y --details-to-stdout"
-           # Собираем Плазму
-           $PMB install --password 147147 --add postmarketos-ui-plasma-desktop,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,maliit-keyboard
+           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
+           $PMB install --password 147147 \
+             --add postmarketos-ui-plasma-desktop \
+             --add device-xiaomi-pipa-nonfree-firmware \
+             --add msm-firmware-loader \
+             --add alsa-ucm-conf \
+             --add mesa-dri-gallium \
+             --add maliit-keyboard
+           
            $PMB export
            cp /tmp/postmarketOS-export/boot.img out/boot-plasma.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-plasma.img
            
-           # Очистка для Гнома
+           sudo rm -rf /tmp/postmarketOS-export/*
            yes | $PMB zap
 
       - name: Build GNOME Mobile
         run: |
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y --details-to-stdout"
-           # Собираем Гном
-           $PMB install --password 147147 --add postmarketos-ui-gnome-mobile,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf
+           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
+           $PMB install --password 147147 \
+             --add postmarketos-ui-gnome-mobile \
+             --add device-xiaomi-pipa-nonfree-firmware \
+             --add msm-firmware-loader \
+             --add alsa-ucm-conf \
+             --add mesa-dri-gallium
+           
            $PMB export
            cp /tmp/postmarketOS-export/boot.img out/boot-gnome.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-gnome.img
 
-      - name: Upload Images
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-multi-ui
+           name: xiaomi-pipa-multi-ui-edge
            path: out/*.img
            retention-days: 7
            
