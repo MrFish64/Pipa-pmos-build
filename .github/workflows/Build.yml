@@ -21,19 +21,23 @@ jobs:
 
       - name: Force Official Init
         run: |
-          # Заставляем программу создать ПРАВИЛЬНЫЙ воркспейс и конфиг версии 3.9.0
-          # Ответы: канал(edge), майнтейнер(user), зеркало(Enter), часовой пояс(Enter) и т.д.
-          echo -e "edge\nuser\n\n\n\n\n\n\n\n\n\n\n\n\n" | python3 "$PWD/pmbootstrap/pmbootstrap.py" init
+          # Используем yes "" чтобы отвечать Enter на ЛЮБОЕ количество вопросов
+          yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" init || true
           
-          # Теперь, когда папки созданы официально, меняем девайс на pipa
+          # Теперь ПРИНУДИТЕЛЬНО меняем девайс и параметры в созданном конфиге
           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py"
           $PMB config device xiaomi-pipa
           $PMB config extra_packages parted,cfdisk,gparted
           $PMB config jobs $(nproc)
+          $PMB config systemd never
+          $PMB config repository edge
+          
+          # Проверка: что в итоге записалось в конфиг
+          $PMB config device
 
       - name: Build xiaomi-pipa
         run: |
-           # Запускаем билд. Теперь у него есть официальный воркспейс и конфиг.
+           # Запускаем билд. Теперь у него есть официальный воркспейс.
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y"
            
            $PMB install --password 147147
