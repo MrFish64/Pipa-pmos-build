@@ -11,12 +11,12 @@ jobs:
       contents: read
     steps:
       - name: Cleanup Workflow History
-        uses: Mattraiano/delete-workflow-runs@v2
+        uses: Matt-Gleich/delete-older-runs@v3.1.0
         with:
-          token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          retain_days: 0
-          keep_minimum_runs: 0
+          repo: ${{ github.repository }}
+          threshold: '1 second' # Удалит всё, что создано раньше текущего момента
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Checkout repository
         uses: actions/checkout@v4
