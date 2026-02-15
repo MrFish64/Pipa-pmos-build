@@ -124,9 +124,9 @@ fastboot set_active b
 
 ## 📅 Build Schedule
 
-| Job | Frequency | Status |
+| Job | Frequency | 
 |-----|----------|--------|
-| Image Builds | Every Day| [![Build Status](https://github.com/MrFish64/Pipa-pmos-build/actions/workflows/build.yml/badge.svg)](https://github.com/MrFish64/Pipa-pmos-build/actions/workflows/build.yml)  |
+| Image Builds | Every Day|
 
 ---
 
