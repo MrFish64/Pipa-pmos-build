@@ -10,39 +10,31 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
-      - name: Set current date variable
-        run: echo "CURRENT_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
-        
       - name: Create artifact directory
         run: mkdir out
         
-      - name: Substitute placeholders and fix config
-        run: |
-           sed -i '/config_version/d' xiaomi-pipa.cfg
-           sed -i '/\[pmbootstrap\]/a config_version = 3' xiaomi-pipa.cfg
-           sed -i "s|HOME|$(echo $HOME)|g;s|NPROC|$(nproc)|g" xiaomi-pipa.cfg
-
       - name: Install pmbootstrap
         run: |
           U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
           git clone --depth=1 "$U"
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Prepare Ports
+      - name: Force Official Init
         run: |
-          mkdir -p $HOME/.config
-          cp xiaomi-pipa.cfg $HOME/.config/pmbootstrap.cfg
-          P_URL=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
-          git clone --depth=1 -b master "$P_URL" $HOME/pmaports_tmp
+          # Заставляем программу создать ПРАВИЛЬНЫЙ воркспейс и конфиг версии 3.9.0
+          # Ответы: канал(edge), майнтейнер(user), зеркало(Enter), часовой пояс(Enter) и т.д.
+          echo -e "edge\nuser\n\n\n\n\n\n\n\n\n\n\n\n\n" | python3 "$PWD/pmbootstrap/pmbootstrap.py" init
+          
+          # Теперь, когда папки созданы официально, меняем девайс на pipa
+          PMB="python3 $PWD/pmbootstrap/pmbootstrap.py"
+          $PMB config device xiaomi-pipa
+          $PMB config extra_packages parted,cfdisk,gparted
+          $PMB config jobs $(nproc)
 
       - name: Build xiaomi-pipa
         run: |
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg"
-           mkdir -p $HOME/pmb_work/cache_git
-           mkdir -p $HOME/pmb_work/chroot_native
-           mkdir -p $HOME/pmb_work/packages
-           mv $HOME/pmaports_tmp $HOME/pmb_work/cache_git/pmaports
-           $PMB config work $HOME/pmb_work
+           # Запускаем билд. Теперь у него есть официальный воркспейс и конфиг.
+           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y"
            
            $PMB install --password 147147
            $PMB export
@@ -53,7 +45,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-none_${{ env.CURRENT_DATE }}
+           name: xiaomi-pipa-none
            path: out/*.img*
            retention-days: 7
            
