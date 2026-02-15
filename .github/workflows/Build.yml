@@ -7,14 +7,14 @@ jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out
+      - name: Check out your repository
         uses: actions/checkout@v4
 
       - name: Install pmbootstrap
-        run: |
-          git clone --depth=1 "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@://github.com" "$GITHUB_WORKSPACE/pmbootstrap"
-          chmod +x "$GITHUB_WORKSPACE/pmbootstrap/pmbootstrap.py"
-          echo "$GITHUB_WORKSPACE/pmbootstrap" >> $GITHUB_PATH
+        uses: actions/checkout@v4
+        with:
+          repository: postmarketOS/pmbootstrap
+          path: pmbootstrap-repo
 
       - name: Setup Configuration
         run: |
@@ -32,10 +32,13 @@ jobs:
 
       - name: Build xiaomi-pipa
         run: |
-          PMB="python3 $GITHUB_WORKSPACE/pmbootstrap/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg"
+          # Используем абсолютный путь к скачанному pmbootstrap
+          PMB="python3 $GITHUB_WORKSPACE/pmbootstrap-repo/pmbootstrap.py -y -c $HOME/.config/pmbootstrap.cfg"
           
-          # Запуск сборки (pmbootstrap сам создаст папки и скачает порты)
+          # Установка (сама скачает порты в пустую папку pmb_work)
           $PMB install --password 147147
+          
+          # Экспорт образов
           $PMB export
           
           mkdir -p out
