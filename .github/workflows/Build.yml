@@ -44,11 +44,9 @@ jobs:
           
           yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
           
-          # Находим путь к портам (в новых версиях это aports)
           APORTS_PATH=$(python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg config aports)
           cd "$APORTS_PATH"
           
-          # Накатываем фиксы pipa-project
           R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
           git remote add pipa "$R" || true
           git fetch pipa master
@@ -59,12 +57,12 @@ jobs:
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
            
-           # Собираем ядро
-           $PMB build linux-postmarketos-qcom-sm8250-pipa --force || $PMB build linux-xiaomi-pipa --force
+           # Собираем ядро (теперь только под одним именем)
+           $PMB build linux-xiaomi-pipa --force
            
-           # Установка
+           # Установка (убрали лишнее имя, чтобы не было конфликта)
            $PMB install --password 147147 \
-             --add linux-postmarketos-qcom-sm8250-pipa,linux-xiaomi-pipa \
+             --add linux-xiaomi-pipa \
              --add postmarketos-ui-plasma-desktop \
              --add device-xiaomi-pipa-nonfree-firmware \
              --add msm-firmware-loader \
@@ -86,3 +84,4 @@ jobs:
            name: xiaomi-pipa-plasma-edge
            path: out/*.img
            retention-days: 7
+           
