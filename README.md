@@ -125,7 +125,8 @@ fastboot set_active b
 
 | Job | Frequency | Status |
 | :--- | :--- | :--- |
-| Image Build | Every Day | ![Badge](../../actions/workflows/build.yml/badge.svg) |
+| Image Build | Every Day | ![Build Status](../../actions/workflows/Build.yml/badge.svg?branch=main) |
+
 
 ---
 
