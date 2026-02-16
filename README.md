@@ -10,6 +10,19 @@
 [![OS](https:&#47;&#47;img.shields.io&#47;badge&#47;OS-postmarketOS-orange.svg)](https:&#47;&#47;postmarketos.org)
 [![License](https:&#47;&#47;img.shields.io&#47;badge&#47;License-MIT-green.svg)](https:&#47;&#47;github.com&#47;MrFish64&#47;Pipa-pmos-build&#47;blob&#47;main&#47;LICENSE)
 
+## 📊 Hardware Status (Xiaomi Pad 6)
+
+| Component | Status | Details |
+| :--- | :--- | :--- |
+| **Display** | ✅ Supported | 144Hz, SM8250 Mainline DSI |
+| **GPU** | ✅ Supported | Adreno 650 (Mesa&#47;Freedreno) |
+| **Touchscreen** | ✅ Supported | Novatek NT36523 (Non-free firmware) |
+| **Wi-Fi / BT** | ✅ Supported | WCN6855 (ath11k) |
+| **Audio** | ⚠️ Partial | Internal speakers WIP (Mainline) |
+| **Battery** | ✅ Supported | Capacity & status monitoring |
+| **USB-C** | ✅ Supported | OTG & Video Output (DisplayPort) |
+
+
 
 ## 🌟 Features 
 
