@@ -123,9 +123,7 @@ fastboot set_active b
 
 ## 📅 Build Schedule
 
-| Job | Frequency | 
-|-----|----------|--------|
-| Image Builds | Every Day|
+Image Builds/Every day
 
 ---
 
