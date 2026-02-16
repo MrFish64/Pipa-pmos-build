@@ -137,7 +137,6 @@ Check out our [Detailed Troubleshooting Guide][WIKI] for common issues, touchscr
 
 [WIKI]: https:&#47;&#47;github.com&#47;MrFish64&#47;Pipa-pmos-build&#47;wiki&#47;Troubleshooting
 
---- -->
 
 > 🚀 *postmarketOS: A long-lasting, touch-optimized Linux distribution for mobile devices*
 
