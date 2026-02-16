@@ -26,10 +26,17 @@ jobs:
           git clone --depth=1 "$U"
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
+      - name: Pre-clone pmaports
+        uses: actions/checkout@v4
+        with:
+          repository: postmarketOS/pmaports
+          path: pmb_work/cache_git/pmaports
+          depth: 1
+
       - name: Configure pmbootstrap & Patch pmaports
         run: |
-          WORK_DIR="/home/runner/pmb_work"
-          mkdir -p /home/runner/.config "$WORK_DIR/cache_git"
+          WORK_DIR="$PWD/pmb_work"
+          mkdir -p /home/runner/.config
           
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
@@ -43,11 +50,6 @@ jobs:
           EOF
           
           yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
-          
-          if [ ! -d "$WORK_DIR/cache_git/pmaports" ]; then
-            UP=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRvcy9wbWFwb3J0cy5naXQ=" | base64 -d)
-            git clone --depth=1 "$UP" "$WORK_DIR/cache_git/pmaports"
-          fi
           
           cd "$WORK_DIR/cache_git/pmaports"
           R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
