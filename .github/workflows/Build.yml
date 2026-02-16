@@ -42,16 +42,16 @@ jobs:
           systemd = never
           EOF
           
-          # 1. Инициализируем (без этого pmb не будет работать)
           yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
           
-          # 2. ПРИНУДИТЕЛЬНО клонируем базу, чтобы папка pmaports ПОЯВИЛАСЬ
+          # ПРИНУДИТЕЛЬНЫЙ КЛОН ЧЕРЕЗ BASE64 (чтобы хром не резал)
           cd "$WORK_DIR/cache_git"
-          git clone --depth=1 https://github.com pmaports
+          UP=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRvcy9wbWFwb3J0cy5naXQ=" | base64 -d)
+          git clone --depth=1 "$UP" pmaports
           
-          # 3. Теперь подменяем на pipa-project
           cd pmaports
-          git remote add pipa https://github.com || true
+          RP=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
+          git remote add pipa "$RP" || true
           git fetch pipa master
           git reset --hard pipa/master
           echo "8" > "$WORK_DIR/version"
@@ -60,7 +60,6 @@ jobs:
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
            
-           # Добавляем ядро pipa-project в список установки
            $PMB install --password 147147 \
              --add linux-postmarketos-qcom-sm8250-pipa,linux-xiaomi-pipa \
              --add postmarketos-ui-plasma-desktop \
