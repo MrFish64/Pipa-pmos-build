@@ -17,29 +17,27 @@ jobs:
           mkdir out
         
       - name: Setup pmbootstrap
+        env:
+          # GitHub сам подставит токен, Chrome сюда не смотрит
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Маскировка ссылок через HEX, чтобы браузер их не трогал
-          PMB_HEX="68747470733a2f2f6769746875622e636f6d2f706f73746d61726b65746f732f706d626f6f747373747261702e676974"
-          URL=$(echo "$PMB_HEX" | xxd -r -p)
-          git clone --depth=1 "$URL" pmb
+          git clone --depth=1 https://x-access-token:${TOKEN}@://github.com pmb
           echo "$PWD/pmb" >> $GITHUB_PATH
 
       - name: Clone and Patch Pmaports
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           WORK_PATH="$PWD/pmb_work"
           mkdir -p "$WORK_PATH/cache_git"
           
-          # Ссылка на pmaports (HEX)
-          PRTS_HEX="68747470733a2f2f6769746875622e636f6d2f706f73746d61726b65746f732f706d61706f7274732e676974"
-          URL_P=$(echo "$PRTS_HEX" | xxd -r -p)
-          git clone --depth=1 "$URL_P" "$WORK_PATH/cache_git/pmaports"
+          # Клонируем порты через токен
+          git clone --depth=1 https://x-access-token:${TOKEN}@://github.com "$WORK_PATH/cache_git/pmaports"
           
-          cd "$WORK_DIR/../pmb_work/cache_git/pmaports" || cd "$PWD/pmb_work/cache_git/pmaports"
+          cd "$WORK_PATH/cache_git/pmaports"
           
-          # Ссылка на pipa-project (HEX)
-          PIPA_HEX="68747470733a2f2f6769746875622e636f6d2f706970612d70726f6a6563742f706d61706f7274732d706970612e676974"
-          URL_R=$(echo "$PIPA_HEX" | xxd -r -p)
-          git remote add pipa "$URL_R"
+          # Подключаем pipa-project через токен
+          git remote add pipa https://x-access-token:${TOKEN}@://github.com
           git fetch pipa master
           git reset --hard pipa/master
           
@@ -58,16 +56,20 @@ jobs:
       - name: Build System
         run: |
            PMB="python3 pmb/pmbootstrap.py -y"
-           $PMB build linux-postmarketos-qcom-sm8250-pipa --force
+           
+           # Собираем ядро pipa-project (у них пакет часто называется так)
+           $PMB build linux-postmarketos-qcom-sm8250-pipa --force || $PMB build linux-xiaomi-pipa --force
+           
            $PMB install --password 147147 \
-             --add linux-postmarketos-qcom-sm8250-pipa \
+             --add linux-postmarketos-qcom-sm8250-pipa,linux-xiaomi-pipa \
              --add device-xiaomi-pipa-nonfree-firmware \
              --add msm-firmware-loader \
              --add alsa-ucm-conf \
              --add mesa-dri-gallium
+           
            $PMB export
            
-           echo "🔍 CHECKING /BOOT CONTENT:"
+           echo "🔍 ПРОВЕРКА /BOOT:"
            $PMB chroot -r -- ls -lh /boot/
            
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
