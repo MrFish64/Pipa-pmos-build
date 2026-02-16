@@ -149,6 +149,12 @@ fastboot set_active b
 ---
 ---
 
+## 🤝 Credits
+- [postmarketOS Team](https:&#47;&#47;postmarketos.org) for the amazing base.
+- [Maport Maintainers](https:&#47;&#47;gitlab.postmarketos.org&#47;postmarketOS&#47;pmaports) for the pipa port.
+- All contributors and testers from the Xiaomi Pad 6 community.
+
+
 ## ❓ Troubleshooting
 
 Check out our [Troubleshooting Guide][WIKI] for common issues, touchscreen fixes, and bootloop solutions.
