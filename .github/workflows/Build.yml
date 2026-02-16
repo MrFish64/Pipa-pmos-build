@@ -31,7 +31,7 @@ jobs:
         with:
           repository: postmarketOS/pmaports
           path: pmb_work/cache_git/pmaports
-          depth: 1
+          fetch-depth: 1
 
       - name: Configure pmbootstrap & Patch pmaports
         run: |
@@ -49,9 +49,11 @@ jobs:
           systemd = never
           EOF
           
+          # Инициализация без скачивания портов (они уже там)
           yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
           
           cd "$WORK_DIR/cache_git/pmaports"
+          # Прямая ссылка на pipa-project через base64
           R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
           git remote add pipa "$R" || true
           git fetch pipa master
