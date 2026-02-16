@@ -57,12 +57,21 @@ jobs:
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
            
-           # Собираем ядро (теперь только под одним именем)
-           $PMB build linux-xiaomi-pipa --force
+           # Авто-поиск имени пакета ядра в папке устройства
+           APORTS_PATH=$($PMB config aports)
+           KERNEL_PKG=$(ls "$APORTS_PATH/device/testing/linux-xiaomi-pipa" "$APORTS_PATH/device/community/linux-xiaomi-pipa" "$APORTS_PATH/device/main/linux-xiaomi-pipa" 2>/dev/null | xargs -I {} basename {} || echo "linux-xiaomi-pipa")
            
-           # Установка (убрали лишнее имя, чтобы не было конфликта)
+           # Если в pipa-project пакет называется по-другому, пробуем найти его через grep
+           if [ ! -d "$APORTS_PATH/device/testing/device-xiaomi-pipa" ]; then
+              KERNEL_PKG=$(grep -oP 'linux-[a-z0-9-]+' "$APORTS_PATH/device/"*"/device-xiaomi-pipa/APKBUILD" | head -1 | cut -d: -f2 || echo "linux-postmarketos-qcom-sm8250-pipa")
+           fi
+
+           echo "🎯 Found kernel package: $KERNEL_PKG"
+
+           # Сборка и установка
+           $PMB build "$KERNEL_PKG" --force
            $PMB install --password 147147 \
-             --add linux-xiaomi-pipa \
+             --add "$KERNEL_PKG" \
              --add postmarketos-ui-plasma-desktop \
              --add device-xiaomi-pipa-nonfree-firmware \
              --add msm-firmware-loader \
