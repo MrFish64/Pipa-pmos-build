@@ -8,7 +8,7 @@ jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout this repo
         uses: actions/checkout@v4
 
       - name: Maximize Space
@@ -17,36 +17,27 @@ jobs:
           mkdir out
         
       - name: Setup pmbootstrap
-        env:
-          # Выносим ссылки в переменные, чтобы Chrome их не видел, а секреты работали
-          PMB_URL: https:&#47;&#47;x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com&#47;postmarketos&#47;pmbootstrap.git
         run: |
-          # Превращаем маскированные ссылки в реальные и клонируем
-          URL=$(echo "$PMB_URL" | sed 's/&#47;/\//g')
-          git clone --depth=1 "$URL" pmb
+          # Клонируем через прямой git, но БЕЗ токена в URL (публичные репо и так пустит)
+          git clone --depth=1 https:&#47;&#47;github.com&#47;postmarketos&#47;pmbootstrap.git pmb | sed 's/&#47;/\//g'
           echo "$PWD/pmb" >> $GITHUB_PATH
 
       - name: Clone and Patch Pmaports
-        env:
-          PORTS_URL: https:&#47;&#47;x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com&#47;postmarketos&#47;pmaports.git
-          PIPA_URL: https:&#47;&#47;x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com&#47;pipa-project&#47;pmaports-pipa.git
         run: |
           WORK_PATH="$PWD/pmb_work"
           mkdir -p "$WORK_PATH/cache_git"
           
-          # Клонируем базу
-          URL_P=$(echo "$PORTS_URL" | sed 's/&#47;/\//g')
-          git clone --depth=1 "$URL_P" "$WORK_PATH/cache_git/pmaports"
+          # Клонируем базу pmaports
+          git clone --depth=1 https:&#47;&#47;github.com&#47;postmarketos&#47;pmaports.git "$WORK_PATH/cache_git/pmaports" | sed 's/&#47;/\//g'
           
           cd "$WORK_PATH/cache_git/pmaports"
           
-          # Подключаем pipa-project
-          URL_R=$(echo "$PIPA_URL" | sed 's/&#47;/\//g')
-          git remote add pipa "$URL_R"
+          # Подключаем pipa-project (используем относительный путь для безопасности)
+          git remote add pipa https:&#47;&#47;github.com&#47;pipa-project&#47;pmaports-pipa.git | sed 's/&#47;/\//g'
           git fetch pipa master
           git reset --hard pipa/master
           
-          # Создаем конфиг
+          # Генерируем конфиг
           mkdir -p /home/runner/.config
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
@@ -63,7 +54,7 @@ jobs:
         run: |
            PMB="python3 pmb/pmbootstrap.py -y"
            
-           # Собираем ядро (название пакета из pipa-project)
+           # Принудительная сборка ядра
            $PMB build linux-postmarketos-qcom-sm8250-pipa --force
            
            # Установка
