@@ -20,15 +20,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Cleanup environment
+      - name: Maximize Build Space
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost /usr/lib/jvm
           sudo docker image prune --all --force
+          df -h
 
       - name: Setup pmbootstrap
         run: |
-          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0b3MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
-          git clone --depth=1 "$U" pmb
+          # Используем зеркало GitLab для надежности
+          git clone --depth=1 https://gitlab.postmarketos.org pmb
           echo "$PWD/pmb" >> $GITHUB_PATH
 
       - name: Initialize Workspace with Pipa-Project Ports
@@ -36,12 +37,13 @@ jobs:
           WORK_DIR="/home/runner/pmb_work"
           mkdir -p "$WORK_DIR/cache_git" /home/runner/.config
           
-          P=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRvcy9wbWFwb3J0cy5naXQ=" | base64 -d)
-          git clone --depth=1 "$P" "$WORK_DIR/cache_git/pmaports"
+          # Клонируем через токен, чтобы избежать ошибки 128
+          AUTH="x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com"
+          
+          git clone --depth=1 https://$AUTH/postmarketos/pmaports.git "$WORK_DIR/cache_git/pmaports"
           
           cd "$WORK_DIR/cache_git/pmaports"
-          R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
-          git remote add pipa "$R"
+          git remote add pipa https://$AUTH/pipa-project/pmaports-pipa.git
           git fetch pipa master
           git reset --hard pipa/master
           
@@ -63,7 +65,7 @@ jobs:
         run: |
           PMB="python3 pmb/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg"
           
-          # Ядра от pipa-project
+          # Указываем все возможные пакеты ядра для pipa-project
           EXTRA="linux-postmarketos-qcom-sm8250-pipa,linux-xiaomi-pipa,device-xiaomi-pipa,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,mesa-dri-gallium"
           
           if [ "${{ matrix.ui }}" == "plasma-desktop" ]; then
@@ -76,6 +78,8 @@ jobs:
           mkdir -p out
           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-${{ matrix.ui }}.img
+          
+          # Ищем и сохраняем пакеты ядра (.apk)
           find /home/runner/pmb_work/packages -name "linux-*.apk" -exec cp {} out/ \; || true
 
       - name: Upload artifacts
