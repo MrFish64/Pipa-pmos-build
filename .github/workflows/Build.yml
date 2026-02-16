@@ -29,9 +29,8 @@ jobs:
       - name: Configure pmbootstrap & Patch pmaports
         run: |
           WORK_DIR="/home/runner/pmb_work"
-          mkdir -p /home/runner/.config "$WORK_DIR"
+          mkdir -p /home/runner/.config "$WORK_DIR/cache_git"
           
-          # 1. Инициализация (скачивает дефолтные порты)
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
@@ -42,12 +41,17 @@ jobs:
           ui = plasma-desktop
           systemd = never
           EOF
+          
           yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
           
-          # 2. ФИКС: Подменяем pmaports на версию от pipa-project (для звука и тача)
+          if [ ! -d "$WORK_DIR/cache_git/pmaports" ]; then
+            UP=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRvcy9wbWFwb3J0cy5naXQ=" | base64 -d)
+            git clone --depth=1 "$UP" "$WORK_DIR/cache_git/pmaports"
+          fi
+          
           cd "$WORK_DIR/cache_git/pmaports"
           R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
-          git remote add pipa "$R"
+          git remote add pipa "$R" || true
           git fetch pipa master
           git reset --hard pipa/master
           echo "8" > "$WORK_DIR/version"
@@ -56,8 +60,6 @@ jobs:
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
            
-           # Добавляем пакеты ядра и фиксы pipa-project
-           # Ядро может называться linux-postmarketos-qcom-sm8250-pipa или linux-xiaomi-pipa
            $PMB install --password 147147 \
              --add linux-postmarketos-qcom-sm8250-pipa,linux-xiaomi-pipa \
              --add postmarketos-ui-plasma-desktop \
