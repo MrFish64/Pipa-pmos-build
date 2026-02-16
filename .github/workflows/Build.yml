@@ -1,4 +1,4 @@
-name: Build Xiaomi Pad 6 postmarketOS MultiUI
+name: Build Xiaomi Pad 6 postmarketOS
 on:
   push:
   workflow_dispatch:
@@ -19,18 +19,18 @@ jobs:
         
       - name: Install pmbootstrap
         run: |
-          # Используем прямое зеркало GitHub, чтобы избежать ошибок GitLab
-          git clone --depth=1 https://github.com
-          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
+          G="https://github.com"
+          git clone --depth=1 $G/postmarketOS/pmbootstrap.git pmb
+          echo "$PWD/pmb" >> $GITHUB_PATH
 
       - name: Configure pmbootstrap
         run: |
           WORK_DIR="/home/runner/pmb_work"
-          mkdir -p /home/runner/.config "$WORK_DIR"
+          mkdir -p /home/runner/.config "$WORK_DIR/cache_git"
           
-          # Клонируем порты также с GitHub для стабильности
-          mkdir -p "$WORK_DIR/cache_git"
-          git clone --depth=1 https://github.com "$WORK_DIR/cache_git/pmaports"
+          G="https://github.com"
+          git clone --depth=1 $G/postmarketOS/pmaports.git "$WORK_DIR/cache_git/pmaports"
+          echo "8" > "$WORK_DIR/version"
 
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
@@ -39,33 +39,30 @@ jobs:
           work = $WORK_DIR
           jobs = $(nproc)
           repository = edge
+          is_default_channel = True
           ui = console
           systemd = never
           [providers]
           firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
           EOF
           
-          # Заглушка версии для обхода миграции
-          echo "8" > "$WORK_DIR/version"
-          
-          python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
+          python3 pmb/pmbootstrap.py -c /home/runner/.config/pmbootstrap.cfg init || true
 
       - name: Build Plasma Desktop
         run: |
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg"
+           PMB="python3 pmb/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg"
            $PMB install --password 147147 \
              --add postmarketos-ui-plasma-desktop,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,mesa-dri-gallium,maliit-keyboard
            $PMB export
            cp /tmp/postmarketOS-export/boot.img out/boot-plasma.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-plasma.img
            
-           # Полная чистка перед следующим UI
            sudo rm -rf /tmp/postmarketOS-export/*
            yes | $PMB zap
 
       - name: Build GNOME Mobile
         run: |
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg"
+           PMB="python3 pmb/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg"
            $PMB install --password 147147 \
              --add postmarketos-ui-gnome-mobile,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,mesa-dri-gallium
            $PMB export
