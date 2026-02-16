@@ -122,8 +122,10 @@ fastboot set_active b
 ---
 
 ## 📅 Build Schedule
-  Job	           Frequency	           Status
-Image Build	  Every Day (00:00 UTC)	  Build Status:Passing
+
+| Job | Frequency | Status |
+| :--- | :--- | :--- |
+| Image Build | Every Day | ![Badge](../../actions/workflows/build.yml/badge.svg) |
 
 ---
 
