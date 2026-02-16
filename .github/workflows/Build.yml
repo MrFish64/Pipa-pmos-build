@@ -3,17 +3,10 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * *'  
 
 jobs:
   build-image:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        ui: [plasma-desktop]
-      fail-fast: false
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,42 +18,46 @@ jobs:
         
       - name: Setup pmbootstrap
         run: |
-          git clone --depth=1 https://gitlab.postmarketos.org pmb
+          # Используем GitHub зеркало, GitLab закрыт
+          git clone --depth=1 https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com pmb
           echo "$PWD/pmb" >> $GITHUB_PATH
 
-      - name: Force Patch Pmaports
+      - name: Clone and Patch Pmaports
         run: |
-          # Создаем порты в предсказуемом месте
-          mkdir -p pmb_work/cache_git
-          git clone --depth=1 https://github.com pmb_work/cache_git/pmaports
+          WORK_PATH="$PWD/pmb_work"
+          mkdir -p "$WORK_PATH/cache_git"
           
-          cd pmb_work/cache_git/pmaports
-          # Подключаем pipa-project (используем токен для обхода ошибки 128)
+          # Клонируем базу pmaports с GitHub
+          git clone --depth=1 https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com "$WORK_PATH/cache_git/pmaports"
+          
+          cd "$WORK_PATH/cache_git/pmaports"
+          # Подключаем pipa-project (фиксы звука/тача)
           git remote add pipa https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com
           git fetch pipa master
           git reset --hard pipa/master
           
-          # Фиксируем путь в конфиге
+          # Настройка конфига
           mkdir -p /home/runner/.config
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
           device = xiaomi-pipa
-          work = /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/pmb_work
+          work = $WORK_PATH
           jobs = $(nproc)
           repository = edge
-          ui = ${{ matrix.ui }}
+          ui = plasma-desktop
           systemd = never
           EOF
 
-      - name: Build Kernel and System
+      - name: Build System
         run: |
+           # Запуск напрямую через python, чтобы не зависеть от PATH
            PMB="python3 pmb/pmbootstrap.py -y"
            
-           # 1. Принудительная сборка ядра (имя пакета из pipa-project)
+           # Принудительная сборка ядра из наших патченных портов
            $PMB build linux-postmarketos-qcom-sm8250-pipa --force
            
-           # 2. Установка (ядро подтянется из локального собранного пакета)
+           # Установка
            $PMB install --password 147147 \
              --add linux-postmarketos-qcom-sm8250-pipa \
              --add device-xiaomi-pipa-nonfree-firmware \
@@ -70,15 +67,16 @@ jobs:
            
            $PMB export
            
-           echo "🔍 FINAL CHECK OF /BOOT:"
+           # Проверка наличия ядра в консоли
+           echo "🔍 CHECKING /BOOT CONTENT:"
            $PMB chroot -r -- ls -lh /boot/
            
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-${{ matrix.ui }}.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-${{ matrix.ui }}
+           name: xiaomi-pipa-plasma-final
            path: out/*.img
            retention-days: 7
