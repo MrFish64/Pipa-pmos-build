@@ -36,7 +36,6 @@ jobs:
           WORK_DIR="/home/runner/pmb_work"
           mkdir -p /home/runner/.config "$WORK_DIR/cache_git"
           
-          # 1. Генерируем конфиг
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
@@ -48,27 +47,32 @@ jobs:
           systemd = never
           EOF
           
-          # 2. Инициализация (скачиваем базу портов)
+          # Инициализация
           yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
           
-          # 3. МАГИЯ ИЗ ВТОРОГО СКРИПТА: Подменяем порты на Pipa-Project
-          cd "$WORK_DIR/cache_git/pmaports"
+          # ПРИНУДИТЕЛЬНО создаем папку и клонируем базу, если её нет
+          cd "$WORK_DIR/cache_git"
+          if [ ! -d "pmaports" ]; then
+            UP=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRvcy9wbWFwb3J0cy5naXQ=" | base64 -d)
+            git clone --depth=1 "$UP" pmaports
+          fi
+          
+          # Переходим и накатываем pipa-project
+          cd pmaports
           R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
           git remote add pipa "$R" || true
           git fetch pipa master
           git reset --hard pipa/master
-          
-          # Поднимаем версию, чтобы pmb пересобрал ядро
           echo "8" > "$WORK_DIR/version"
 
       - name: Build System and Kernel
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg"
            
-           # Принудительно собираем ядро из новых портов
+           # Сборка ядра (имя пакета из pipa-project)
            $PMB build linux-postmarketos-qcom-sm8250-pipa --force
            
-           # Установка системы (UI + Ядро + Фиксы)
+           # Установка системы
            $PMB install --password 147147 \
              --add linux-postmarketos-qcom-sm8250-pipa \
              --add device-xiaomi-pipa-nonfree-firmware \
@@ -79,7 +83,6 @@ jobs:
            
            $PMB export
            
-           # СРАЗУ ПРОВЕРЯЕМ ПАПКУ /BOOT (для твоего спокойствия в логах)
            echo "🔍 CHECKING /BOOT CONTENT:"
            $PMB chroot -r -- ls -lh /boot/
            
