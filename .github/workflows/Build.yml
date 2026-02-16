@@ -11,79 +11,66 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ui: [plasma-desktop, gnome-mobile]
+        ui: [plasma-desktop]
       fail-fast: false
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Free disk space
+      - name: Maximize Space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
-      
-      - name: Create workspace
-        run: mkdir out
+          mkdir out
         
-      - name: Install pmbootstrap
+      - name: Setup pmbootstrap
         run: |
-          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0b3MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
-          git clone --depth=1 "$U"
-          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
+          git clone --depth=1 https://gitlab.postmarketos.org pmb
+          echo "$PWD/pmb" >> $GITHUB_PATH
 
-      - name: Configure pmbootstrap & Patch pmaports
+      - name: Force Patch Pmaports
         run: |
-          WORK_DIR="/home/runner/pmb_work"
-          mkdir -p /home/runner/.config "$WORK_DIR/cache_git"
+          # Создаем порты в предсказуемом месте
+          mkdir -p pmb_work/cache_git
+          git clone --depth=1 https://github.com pmb_work/cache_git/pmaports
           
+          cd pmb_work/cache_git/pmaports
+          # Подключаем pipa-project (используем токен для обхода ошибки 128)
+          git remote add pipa https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com
+          git fetch pipa master
+          git reset --hard pipa/master
+          
+          # Фиксируем путь в конфиге
+          mkdir -p /home/runner/.config
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
           device = xiaomi-pipa
-          work = $WORK_DIR
+          work = /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/pmb_work
           jobs = $(nproc)
           repository = edge
           ui = ${{ matrix.ui }}
           systemd = never
           EOF
-          
-          # Инициализация
-          yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
-          
-          # ПРИНУДИТЕЛЬНО создаем папку и клонируем базу, если её нет
-          cd "$WORK_DIR/cache_git"
-          if [ ! -d "pmaports" ]; then
-            UP=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRvcy9wbWFwb3J0cy5naXQ=" | base64 -d)
-            git clone --depth=1 "$UP" pmaports
-          fi
-          
-          # Переходим и накатываем pipa-project
-          cd pmaports
-          R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
-          git remote add pipa "$R" || true
-          git fetch pipa master
-          git reset --hard pipa/master
-          echo "8" > "$WORK_DIR/version"
 
-      - name: Build System and Kernel
+      - name: Build Kernel and System
         run: |
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg"
+           PMB="python3 pmb/pmbootstrap.py -y"
            
-           # Сборка ядра (имя пакета из pipa-project)
+           # 1. Принудительная сборка ядра (имя пакета из pipa-project)
            $PMB build linux-postmarketos-qcom-sm8250-pipa --force
            
-           # Установка системы
+           # 2. Установка (ядро подтянется из локального собранного пакета)
            $PMB install --password 147147 \
              --add linux-postmarketos-qcom-sm8250-pipa \
              --add device-xiaomi-pipa-nonfree-firmware \
              --add msm-firmware-loader \
              --add alsa-ucm-conf \
-             --add mesa-dri-gallium \
-             --add maliit-keyboard
+             --add mesa-dri-gallium
            
            $PMB export
            
-           echo "🔍 CHECKING /BOOT CONTENT:"
+           echo "🔍 FINAL CHECK OF /BOOT:"
            $PMB chroot -r -- ls -lh /boot/
            
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
