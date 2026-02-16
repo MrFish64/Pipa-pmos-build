@@ -13,7 +13,7 @@
 ## 📊 Hardware Status (Xiaomi Pad 6)
 
 | Component | Status | 
-| :--- | :--- | :--- |
+| :--- | :--- | 
 | **Display** | ✅ Supported | 
 | **GPU** | ✅ Supported |
 | **Touchscreen** | ✅ Supported |
