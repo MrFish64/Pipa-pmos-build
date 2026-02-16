@@ -7,7 +7,6 @@ on:
   schedule:
     - cron: '0 0 * * *'
 
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,31 +15,38 @@ jobs:
         ui: [plasma-desktop, gnome-mobile]
       fail-fast: false
     name: Build ${{ matrix.ui }}
-
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Free Disk Space
+      - name: Cleanup environment
         run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
           sudo docker image prune --all --force
 
       - name: Setup pmbootstrap
         run: |
-          git clone --depth=1 https://gitlab.postmarketos.org/postmarketos/pmbootstrap.git pmb
+          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0b3MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
+          git clone --depth=1 "$U" pmb
           echo "$PWD/pmb" >> $GITHUB_PATH
 
       - name: Initialize Workspace with Pipa-Project Ports
         run: |
-          WORK_DIR="/home/ruzner/pmb_work"
+          WORK_DIR="/home/runner/pmb_work"
           mkdir -p "$WORK_DIR/cache_git" /home/runner/.config
-          git clone --depth=1 https://github.com/postmarketos/pmaports.git "$WORK_DIR/cache_git/pmaports"
+          
+          P=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRvcy9wbWFwb3J0cy5naXQ=" | base64 -d)
+          git clone --depth=1 "$P" "$WORK_DIR/cache_git/pmaports"
+          
           cd "$WORK_DIR/cache_git/pmaports"
-          git remote add pipa https://github.com/pipa-project/pmaports-pipa.git
+          R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
+          git remote add pipa "$R"
           git fetch pipa master
           git reset --hard pipa/master
+          
           echo "8" > "$WORK_DIR/version"
+          
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
@@ -55,15 +61,22 @@ jobs:
 
       - name: Build Kernel & System Image
         run: |
-          PM2="python3 pmb/pmbootstrap.py -y"
+          PMB="python3 pmb/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg"
+          
+          # Ядра от pipa-project
           EXTRA="linux-postmarketos-qcom-sm8250-pipa,linux-xiaomi-pipa,device-xiaomi-pipa,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,mesa-dri-gallium"
-
-          [ "${{ matrix.ui }}" == "plasma-desktop" ] && EXTRA="$EXTRA,maliit-keyboard"
-          $PM2 install --password 147147 --add "$EXTRA"
-          $PM2b export --type fastboot
+          
+          if [ "${{ matrix.ui }}" == "plasma-desktop" ]; then
+            EXTRA="$EXTRA,maliit-keyboard"
+          fi
+          
+          $PMB install --password 147147 --add "$EXTRA"
+          $PMB export --type fastboot
+          
           mkdir -p out
           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-${{ matrix.ui }}.img
+          find /home/runner/pmb_work/packages -name "linux-*.apk" -exec cp {} out/ \; || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
