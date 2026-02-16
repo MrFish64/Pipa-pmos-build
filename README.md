@@ -6,6 +6,11 @@
 
 ---
 
+[![Platform](https:&#47;&#47;img.shields.io&#47;badge&#47;Platform-Xiaomi%20Pad%206-blue.svg)](https:&#47;&#47;github.com&#47;MrFish64&#47;Pipa-pmos-build)
+[![OS](https:&#47;&#47;img.shields.io&#47;badge&#47;OS-postmarketOS-orange.svg)](https:&#47;&#47;postmarketos.org)
+[![License](https:&#47;&#47;img.shields.io&#47;badge&#47;License-MIT-green.svg)](https:&#47;&#47;github.com&#47;MrFish64&#47;Pipa-pmos-build&#47;blob&#47;main&#47;LICENSE)
+
+
 ## 🌟 Features 
 
 - **Supported Desktop Environments**  
