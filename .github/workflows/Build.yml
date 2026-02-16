@@ -26,11 +26,10 @@ jobs:
           git clone --depth=1 "$U"
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Configure pmbootstrap & Patch pmaports
+      - name: Configure pmbootstrap
         run: |
           WORK_DIR="/home/runner/pmb_work"
-          mkdir -p /home/runner/.config "$WORK_DIR/cache_git"
-          
+          mkdir -p /home/runner/.config "$WORK_DIR"
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
@@ -40,28 +39,19 @@ jobs:
           repository = edge
           ui = plasma-desktop
           systemd = never
+          [providers]
+          firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
           EOF
-          
+          # Инициализация (она сама скачает порты без ошибок Git)
           yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
-          
-          # ПРИНУДИТЕЛЬНЫЙ КЛОН ЧЕРЕЗ BASE64 (чтобы хром не резал)
-          cd "$WORK_DIR/cache_git"
-          UP=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRvcy9wbWFwb3J0cy5naXQ=" | base64 -d)
-          git clone --depth=1 "$UP" pmaports
-          
-          cd pmaports
-          RP=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
-          git remote add pipa "$RP" || true
-          git fetch pipa master
-          git reset --hard pipa/master
-          echo "8" > "$WORK_DIR/version"
 
-      - name: Build system image with Kernel
+      - name: Build system image
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
            
+           # Пакет linux-xiaomi-pipa ОБЯЗАТЕЛЬНО добавляем сюда, чтобы ядро собралось
            $PMB install --password 147147 \
-             --add linux-postmarketos-qcom-sm8250-pipa,linux-xiaomi-pipa \
+             --add linux-xiaomi-pipa \
              --add postmarketos-ui-plasma-desktop \
              --add device-xiaomi-pipa-nonfree-firmware \
              --add msm-firmware-loader \
