@@ -17,25 +17,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Cleanup environment
+      - name: Maximize build space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
           sudo docker image prune --all --force
+          df -h
 
       - name: Setup pmbootstrap
         run: |
-          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
+          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0mWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
           git clone --depth=1 "$U" pmb
           echo "$PWD/pmb" >> $GITHUB_PATH
 
-      - name: Initialize workspace
+      - name: Initialize Galactic Workspace
         run: |
+          
           WORK_DIR="/home/runner/.local/var/pmbootstrap"
           mkdir -p "$WORK_DIR/cache_git" /home/runner/.config
+          
           
           P=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
           git clone --depth=1 -b master "$P" "$WORK_DIR/cache_git/pmaports"
           
+      
           echo "8" > "$WORK_DIR/version"
           
           cat <<EOF > /home/runner/pmb.cfg
@@ -50,21 +54,29 @@ jobs:
           systemd = never
           
           [providers]
+          firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
           
           [mirrors]
           EOF
           
           cp /home/runner/pmb.cfg /home/runner/.config/pmbootstrap.cfg
 
+      - name: Patch broken edge dependencies
+        run: |
+          TARGET_APK="$HOME/.local/var/pmbootstrap/cache_git/pmaports/device/testing/device-xiaomi-pipa/APKBUILD"
+          if [ -f "$TARGET_APK" ]; then
+            sed -i 's/firmware-xiaomi-pipa-[a-z0-9-]*//g' "$TARGET_APK"
+            echo "APKBUILD patched successfully"
+          fi
+
       - name: Build system image
         run: |
           PMB="python3 pmb/pmbootstrap.py -y -c /home/runner/pmb.cfg"
           
-          # Use meta-packages to avoid dependency conflicts in edge branch
+          
           EXTRA="device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,mesa-dri-gallium"
-          if [ "${{ matrix.ui }}" == "plasma-desktop" ]; then
-            EXTRA="$EXTRA,maliit-keyboard"
-          fi
+          [ "${{ matrix.ui }}" == "plasma-desktop" ] && EXTRA="$EXTRA,maliit-keyboard"
+          
           
           $PMB install --password 147147 --add "$EXTRA"
           $PMB export --type fastboot
