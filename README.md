@@ -133,7 +133,7 @@ fastboot set_active b
 
 ## ❓ Troubleshooting
 
-Check out our [Detailed Troubleshooting Guide][WIKI] for common issues, touchscreen fixes, and bootloop solutions.
+Check out our [Troubleshooting Guide][WIKI] for common issues, touchscreen fixes, and bootloop solutions.
 
 [WIKI]: https:&#47;&#47;github.com&#47;MrFish64&#47;Pipa-pmos-build&#47;wiki&#47;Troubleshooting
 
