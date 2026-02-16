@@ -22,23 +22,23 @@ jobs:
         
       - name: Install pmbootstrap
         run: |
-          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0b3MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
-          git clone --depth=1 "$U"
-          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
+          # Прямая ссылка на официальный GitLab
+          git clone --depth=1 https://gitlab.postmarketos.org pmb
+          echo "$PWD/pmb" >> $GITHUB_PATH
 
       - name: Clone and Patch pmaports
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           WORK_DIR="$PWD/pmb_work"
           mkdir -p "$WORK_DIR/cache_git"
           
-          # Клонируем базу через системный токен (избегаем 404)
-          UP=$(echo "aHR0cHM6Ly94LWFjY2Vzcy10b2tlbjoke3sgc2VjcmV0cy5HSVRIVUJfVE9LRU4gfX1AZ2l0aHViLmNvbS9wb3N0bWFya2V0b3MvcG1hcG9ydHMuZ2l0" | base64 -d)
-          git clone --depth=1 "$UP" "$WORK_DIR/cache_git/pmaports"
+          # Клонируем через стандартный протокол, используя токен из окружения
+          git clone --depth=1 https://x-access-token:${GH_TOKEN}@://github.com "$WORK_DIR/cache_git/pmaports"
           
-          # Подключаем pipa-project
           cd "$WORK_DIR/cache_git/pmaports"
-          R=$(echo "aHR0cHM6Ly94LWFjY2Vzcy10b2tlbjoke3sgc2VjcmV0cy5HSVRIVUJfVE9LRU4gfX1AZ2l0aHViLmNvbS9waXBhLXByb2plY3QvcG1hcG9ydHMtcGlwYS5naXQ=" | base64 -d)
-          git remote add pipa "$R"
+          # Подключаем pipa-project
+          git remote add pipa https://x-access-token:${GH_TOKEN}@://github.com
           git fetch pipa master
           git reset --hard pipa/master
           echo "8" > "$WORK_DIR/version"
@@ -59,11 +59,12 @@ jobs:
           systemd = never
           EOF
           
-          yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
+          # Инициализация
+          python3 pmb/pmbootstrap.py -c /home/runner/.config/pmbootstrap.cfg init || true
 
       - name: Build system image with Kernel
         run: |
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
+           PMB="python3 pmb/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
            
            $PMB install --password 147147 \
              --add linux-postmarketos-qcom-sm8250-pipa,linux-xiaomi-pipa \
