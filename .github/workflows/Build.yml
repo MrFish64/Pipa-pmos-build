@@ -30,6 +30,7 @@ jobs:
         run: |
           WORK_DIR="/home/runner/pmb_work"
           mkdir -p /home/runner/.config "$WORK_DIR"
+          
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
@@ -39,31 +40,29 @@ jobs:
           repository = edge
           ui = plasma-desktop
           systemd = never
-          [providers]
-          firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
           EOF
           
-          # Инициализация скачивает официальные порты
           yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
           
-          # ПОДМЕНА ПОРТОВ НА PIPA-PROJECT (Фиксы звука и тача)
-          # Находим, куда pmb положил порты и сбрасываем их на кастомные
-          PMB_P=$(python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg config pmaports)
-          cd "$PMB_P"
+          # Находим путь к портам (в новых версиях это aports)
+          APORTS_PATH=$(python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg config aports)
+          cd "$APORTS_PATH"
+          
+          # Накатываем фиксы pipa-project
           R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
           git remote add pipa "$R" || true
           git fetch pipa master
           git reset --hard pipa/master
           echo "8" > "$WORK_DIR/version"
 
-      - name: Build system image
+      - name: Build system image with Kernel
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
            
-           # ПРИНУДИТЕЛЬНО собираем ядро из патченных исходников
+           # Собираем ядро
            $PMB build linux-postmarketos-qcom-sm8250-pipa --force || $PMB build linux-xiaomi-pipa --force
            
-           # Установка системы (ядро подтянется локально собранное)
+           # Установка
            $PMB install --password 147147 \
              --add linux-postmarketos-qcom-sm8250-pipa,linux-xiaomi-pipa \
              --add postmarketos-ui-plasma-desktop \
@@ -75,7 +74,6 @@ jobs:
            
            $PMB export
            
-           # Проверка содержимого /boot прямо в консоли
            echo "🔍 CHECKING /BOOT CONTENT:"
            $PMB chroot -r -- ls -lh /boot/
            
