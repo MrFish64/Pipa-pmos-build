@@ -14,13 +14,13 @@
 
 | Component | Status | Details |
 | :--- | :--- | :--- |
-| **Display** | ✅ Supported | 144Hz, SM8250 Mainline DSI |
-| **GPU** | ✅ Supported | Adreno 650 (Mesa&#47;Freedreno) |
-| **Touchscreen** | ✅ Supported | Novatek NT36523 (Non-free firmware) |
-| **Wi-Fi / BT** | ✅ Supported | WCN6855 (ath11k) |
-| **Audio** | ⚠️ Partial | Internal speakers WIP (Mainline) |
-| **Battery** | ✅ Supported | Capacity & status monitoring |
-| **USB-C** | ✅ Supported | OTG & Video Output (DisplayPort) |
+| **Display** | ✅ Supported | 
+| **GPU** | ✅ Supported |
+| **Touchscreen** | ✅ Supported |
+| **Wi-Fi / BT** | ✅ Supported | 
+| **Audio** | ⚠️ Partial | 
+| **Battery** | ✅ Supported | 
+| **USB-C** | ✅ Supported | 
 
 
 
