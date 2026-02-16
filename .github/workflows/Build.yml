@@ -60,8 +60,11 @@ jobs:
         run: |
           PMB="python3 pmb/pmbootstrap.py -y -c /home/runner/pmb.cfg"
           
+          # Use meta-packages to avoid dependency conflicts in edge branch
           EXTRA="device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,mesa-dri-gallium"
-          [ "${{ matrix.ui }}" == "plasma-desktop" ] && EXTRA="$EXTRA,maliit-keyboard"
+          if [ "${{ matrix.ui }}" == "plasma-desktop" ]; then
+            EXTRA="$EXTRA,maliit-keyboard"
+          fi
           
           $PMB install --password 147147 --add "$EXTRA"
           $PMB export --type fastboot
@@ -76,4 +79,3 @@ jobs:
           name: xiaomi-pipa-${{ matrix.ui }}
           path: out/*.img
           retention-days: 7
-          
