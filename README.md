@@ -122,8 +122,8 @@ fastboot set_active b
 ---
 
 ## 📅 Build Schedule
-
-Image Builds/Every day
+  Job	           Frequency	           Status
+Image Build	  Every Day (00:00 UTC)	  Build Status:Passing
 
 ---
 
