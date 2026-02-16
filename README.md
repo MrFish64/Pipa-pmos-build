@@ -10,7 +10,6 @@
 
 - **Supported Desktop Environments**  
   * KDE Plasma Desktop  
-  * GNOME Shell(soon)
 
 - **Automated Builds**  
   ✅ Builds every day (UTC)  
