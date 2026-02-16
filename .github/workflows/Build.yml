@@ -9,6 +9,11 @@ on:
 jobs:
   build-image:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        ui: [plasma-desktop, gnome-mobile]
+      fail-fast: false
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,10 +31,12 @@ jobs:
           git clone --depth=1 "$U"
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Configure pmbootstrap
+      - name: Configure pmbootstrap & Patch pmaports
         run: |
           WORK_DIR="/home/runner/pmb_work"
-          mkdir -p /home/runner/.config "$WORK_DIR"
+          mkdir -p /home/runner/.config "$WORK_DIR/cache_git"
+          
+          # 1. Генерируем конфиг
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
@@ -37,45 +44,51 @@ jobs:
           work = $WORK_DIR
           jobs = $(nproc)
           repository = edge
-          ui = plasma-desktop
+          ui = ${{ matrix.ui }}
           systemd = never
-          [providers]
-          firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
           EOF
+          
+          # 2. Инициализация (скачиваем базу портов)
           yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
+          
+          # 3. МАГИЯ ИЗ ВТОРОГО СКРИПТА: Подменяем порты на Pipa-Project
+          cd "$WORK_DIR/cache_git/pmaports"
+          R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
+          git remote add pipa "$R" || true
+          git fetch pipa master
+          git reset --hard pipa/master
+          
+          # Поднимаем версию, чтобы pmb пересобрал ядро
+          echo "8" > "$WORK_DIR/version"
 
-      - name: Build Kernel and System
+      - name: Build System and Kernel
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg"
            
-           # 1. ПРИНУДИТЕЛЬНО ПЕРЕСОБИРАЕМ ЯДРО ИЗ ИСХОДНИКОВ
-           echo "🔨 Building kernel linux-xiaomi-pipa..."
-           $PMB build linux-xiaomi-pipa --force
+           # Принудительно собираем ядро из новых портов
+           $PMB build linux-postmarketos-qcom-sm8250-pipa --force
            
-           # 2. УСТАНОВКА СИСТЕМЫ (ядро подтянется из локального кэша)
-           echo "🚀 Installing system image..."
+           # Установка системы (UI + Ядро + Фиксы)
            $PMB install --password 147147 \
-             --add linux-xiaomi-pipa \
-             --add postmarketos-ui-plasma-desktop \
+             --add linux-postmarketos-qcom-sm8250-pipa \
              --add device-xiaomi-pipa-nonfree-firmware \
              --add msm-firmware-loader \
              --add alsa-ucm-conf \
              --add mesa-dri-gallium \
              --add maliit-keyboard
            
-           # 3. ЭКСПОРТ
            $PMB export
            
-           # 4. МГНОВЕННАЯ ПРОВЕРКА В ЛОГАХ (не нужно качать!)
-           echo "🔍 ПРОВЕРКА СОДЕРЖИМОГО /BOOT ВНУТРИ ОБРАЗА:"
+           # СРАЗУ ПРОВЕРЯЕМ ПАПКУ /BOOT (для твоего спокойствия в логах)
+           echo "🔍 CHECKING /BOOT CONTENT:"
            $PMB chroot -r -- ls -lh /boot/
            
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-${{ matrix.ui }}.img
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-plasma-edge
+           name: xiaomi-pipa-${{ matrix.ui }}
            path: out/*.img
            retention-days: 7
