@@ -19,66 +19,50 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Cleanup environment
+      - name: Free disk space
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
-          sudo docker image prune --all --force
+          sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
 
-      - name: Setup pmbootstrap
+      - name: Install pmbootstrap
         run: |
-          U=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRvcy9wbWJvb3RzdHJhcC5naXQ=" | base64 -d)
-          git clone --depth=1 "$U" pmb
-          echo "$PWD/pmb" >> $GITHUB_PATH
+          # Используем официальный pip для установки, чтобы избежать проблем с git clone
+          pip3 install pmbootstrap
+          pmbootstrap --version
 
-      - name: Initialize Workspace with Pipa-Project Ports
+      - name: Configure pmbootstrap
         run: |
-          WORK_DIR="/home/runner/.local/var/pmbootstrap"
-          mkdir -p "$WORK_DIR/cache_git" /home/runner/.config
-          
-          P=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3Bvc3RtYXJrZXRvcy9wbWFwb3J0cy5naXQ=" | base64 -d)
-          git clone --depth=1 "$P" "$WORK_DIR/cache_git/pmaports"
-          
-          cd "$WORK_DIR/cache_git/pmaports"
-          R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
-          git remote add pipa "$R"
-          git fetch pipa master
-          git reset --hard pipa/master
-          
-          echo "8" > "$WORK_DIR/version"
-          
-          cat <<EOF > /home/runner/pmb.cfg
+          # Инициализируем конфиг напрямую
+          mkdir -p /home/runner/.config
+          cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
           device = xiaomi-pipa
-          work = $WORK_DIR
+          work = /home/runner/pmb_work
           jobs = $(nproc)
           repository = edge
           is_default_channel = True
           ui = ${{ matrix.ui }}
           systemd = never
-          [providers]
-          [mirrors]
           EOF
           
-          cp /home/runner/pmb.cfg /home/runner/.config/pmbootstrap.cfg
+          # Авто-инициализация скачает официальные pmaports сама
+          pmbootstrap init || true
 
-      - name: Build Kernel & System Image
+      - name: Build System Image
         run: |
-          PMB="python3 pmb/pmbootstrap.py -y -c /home/runner/pmb.cfg"
-          
-          EXTRA="linux-postmarketos-qcom-sm8250-pipa,linux-xiaomi-pipa,device-xiaomi-pipa,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,mesa-dri-gallium"
+          # Добавляем пакеты. В официальных портах ядро называется linux-xiaomi-pipa
+          EXTRA="linux-xiaomi-pipa,device-xiaomi-pipa-nonfree-firmware,msm-firmware-loader,alsa-ucm-conf,mesa-dri-gallium"
           
           if [ "${{ matrix.ui }}" == "plasma-desktop" ]; then
             EXTRA="$EXTRA,maliit-keyboard"
           fi
           
-          $PMB install --password 147147 --add "$EXTRA"
-          $PMB export --type fastboot
+          pmbootstrap -y install --password 147147 --add "$EXTRA"
+          pmbootstrap export
           
           mkdir -p out
           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-${{ matrix.ui }}.img
-          find /home/runner/.local/var/pmbootstrap/packages -name "linux-*.apk" -exec cp {} out/ \; || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
