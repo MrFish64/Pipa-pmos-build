@@ -129,25 +129,13 @@ fastboot set_active b
 
 
 ---
+---
 
-<!--
 ## ❓ Troubleshooting
 
-Check out our [Wiki](https://github.com/rifux/pipa-pmos-builds/wiki)  for:
-- Common issues and fixes
-- Touchscreen calibration
-- Battery status monitoring
-- Performance optimization tips
+Check out our [Detailed Troubleshooting Guide][WIKI] for common issues, touchscreen fixes, and bootloop solutions.
 
---- -->
-
-<!-- ## 🤝 Contribution Guidelines
-
-We welcome contributions! Please see our [Contribution Guide](CONTRIBUTING.md) for:
-- Reporting issues
-- Submitting feature requests
-- Building custom configurations
-- Improving documentation
+[WIKI]: https:&#47;&#47;github.com&#47;MrFish64&#47;Pipa-pmos-build&#47;wiki&#47;Troubleshooting
 
 --- -->
 
