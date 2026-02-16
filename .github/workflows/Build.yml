@@ -1,7 +1,10 @@
-name: Build Xiaomi Pad 6 postmarketOS Plasma
+name: Build Xiaomi Pad 6 postmarketOS
 on:
   push:
+    branches: [ main ]
   workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'  
 
 jobs:
   build-image:
