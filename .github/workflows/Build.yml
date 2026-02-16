@@ -8,7 +8,7 @@ jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout this repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Maximize Space
@@ -18,8 +18,10 @@ jobs:
         
       - name: Setup pmbootstrap
         run: |
-          # Клонируем через прямой git, но БЕЗ токена в URL (публичные репо и так пустит)
-          git clone --depth=1 https:&#47;&#47;github.com&#47;postmarketos&#47;pmbootstrap.git pmb | sed 's/&#47;/\//g'
+          # Маскировка ссылок через HEX, чтобы браузер их не трогал
+          PMB_HEX="68747470733a2f2f6769746875622e636f6d2f706f73746d61726b65746f732f706d626f6f747373747261702e676974"
+          URL=$(echo "$PMB_HEX" | xxd -r -p)
+          git clone --depth=1 "$URL" pmb
           echo "$PWD/pmb" >> $GITHUB_PATH
 
       - name: Clone and Patch Pmaports
@@ -27,17 +29,20 @@ jobs:
           WORK_PATH="$PWD/pmb_work"
           mkdir -p "$WORK_PATH/cache_git"
           
-          # Клонируем базу pmaports
-          git clone --depth=1 https:&#47;&#47;github.com&#47;postmarketos&#47;pmaports.git "$WORK_PATH/cache_git/pmaports" | sed 's/&#47;/\//g'
+          # Ссылка на pmaports (HEX)
+          PRTS_HEX="68747470733a2f2f6769746875622e636f6d2f706f73746d61726b65746f732f706d61706f7274732e676974"
+          URL_P=$(echo "$PRTS_HEX" | xxd -r -p)
+          git clone --depth=1 "$URL_P" "$WORK_PATH/cache_git/pmaports"
           
-          cd "$WORK_PATH/cache_git/pmaports"
+          cd "$WORK_DIR/../pmb_work/cache_git/pmaports" || cd "$PWD/pmb_work/cache_git/pmaports"
           
-          # Подключаем pipa-project (используем относительный путь для безопасности)
-          git remote add pipa https:&#47;&#47;github.com&#47;pipa-project&#47;pmaports-pipa.git | sed 's/&#47;/\//g'
+          # Ссылка на pipa-project (HEX)
+          PIPA_HEX="68747470733a2f2f6769746875622e636f6d2f706970612d70726f6a6563742f706d61706f7274732d706970612e676974"
+          URL_R=$(echo "$PIPA_HEX" | xxd -r -p)
+          git remote add pipa "$URL_R"
           git fetch pipa master
           git reset --hard pipa/master
           
-          # Генерируем конфиг
           mkdir -p /home/runner/.config
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
@@ -53,18 +58,13 @@ jobs:
       - name: Build System
         run: |
            PMB="python3 pmb/pmbootstrap.py -y"
-           
-           # Принудительная сборка ядра
            $PMB build linux-postmarketos-qcom-sm8250-pipa --force
-           
-           # Установка
            $PMB install --password 147147 \
              --add linux-postmarketos-qcom-sm8250-pipa \
              --add device-xiaomi-pipa-nonfree-firmware \
              --add msm-firmware-loader \
              --add alsa-ucm-conf \
              --add mesa-dri-gallium
-           
            $PMB export
            
            echo "🔍 CHECKING /BOOT CONTENT:"
