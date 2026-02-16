@@ -26,7 +26,7 @@ jobs:
           git clone --depth=1 "$U"
           echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Configure pmbootstrap & Patch pmaports
+      - name: Configure pmbootstrap & Force Patch Ports
         run: |
           WORK_DIR="/home/runner/pmb_work"
           mkdir -p /home/runner/.config "$WORK_DIR"
@@ -42,33 +42,33 @@ jobs:
           systemd = never
           EOF
           
+          # 1. Инициализация (она создаст папку портов в .local)
           yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
           
+          # 2. Узнаем КУДА он на самом деле положил порты
           APORTS_PATH=$(python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg config aports)
-          cd "$APORTS_PATH"
+          echo "REAL APORTS PATH: $APORTS_PATH"
           
+          # 3. СИЛОВОЙ ПАТЧ (прямо в ту папку, на которую он ругался)
+          cd "$APORTS_PATH"
           R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
           git remote add pipa "$R" || true
           git fetch pipa master
           git reset --hard pipa/master
-          echo "8" > "$WORK_DIR/version"
+          
+          # Удаляем старые пакеты, чтобы он не взял готовое ядро
+          rm -rf "$WORK_DIR/packages"
 
       - name: Build system image with Kernel
         run: |
            PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
            
-           # Авто-поиск имени пакета ядра в папке устройства
+           # Ищем как называется ядро в APKBUILD устройства
            APORTS_PATH=$($PMB config aports)
-           KERNEL_PKG=$(ls "$APORTS_PATH/device/testing/linux-xiaomi-pipa" "$APORTS_PATH/device/community/linux-xiaomi-pipa" "$APORTS_PATH/device/main/linux-xiaomi-pipa" 2>/dev/null | xargs -I {} basename {} || echo "linux-xiaomi-pipa")
-           
-           # Если в pipa-project пакет называется по-другому, пробуем найти его через grep
-           if [ ! -d "$APORTS_PATH/device/testing/device-xiaomi-pipa" ]; then
-              KERNEL_PKG=$(grep -oP 'linux-[a-z0-9-]+' "$APORTS_PATH/device/"*"/device-xiaomi-pipa/APKBUILD" | head -1 | cut -d: -f2 || echo "linux-postmarketos-qcom-sm8250-pipa")
-           fi
+           KERNEL_PKG=$(grep -oP 'linux-[a-z0-9-]+' "$APORTS_PATH/device/"*"/device-xiaomi-pipa/APKBUILD" | head -1 | cut -d: -f2 || echo "linux-postmarketos-qcom-sm8250-pipa")
+           echo "🎯 Targeted Kernel: $KERNEL_PKG"
 
-           echo "🎯 Found kernel package: $KERNEL_PKG"
-
-           # Сборка и установка
+           # Сборка ядра и системы
            $PMB build "$KERNEL_PKG" --force
            $PMB install --password 147147 \
              --add "$KERNEL_PKG" \
