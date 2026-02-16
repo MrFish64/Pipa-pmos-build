@@ -3,6 +3,8 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'  
 
 jobs:
   build-image:
@@ -11,65 +13,70 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Maximize Space
+      - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
-          mkdir out
+      
+      - name: Create workspace
+        run: mkdir out
         
-      - name: Setup pmbootstrap
-        env:
-          # GitHub сам подставит токен, Chrome сюда не смотрит
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install pmbootstrap
         run: |
-          git clone --depth=1 https://x-access-token:${TOKEN}@://github.com pmb
-          echo "$PWD/pmb" >> $GITHUB_PATH
+          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0b3MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
+          git clone --depth=1 "$U"
+          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
 
-      - name: Clone and Patch Pmaports
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure pmbootstrap & Patch pmaports
         run: |
-          WORK_PATH="$PWD/pmb_work"
-          mkdir -p "$WORK_PATH/cache_git"
-          
-          # Клонируем порты через токен
-          git clone --depth=1 https://x-access-token:${TOKEN}@://github.com "$WORK_PATH/cache_git/pmaports"
-          
-          cd "$WORK_PATH/cache_git/pmaports"
-          
-          # Подключаем pipa-project через токен
-          git remote add pipa https://x-access-token:${TOKEN}@://github.com
-          git fetch pipa master
-          git reset --hard pipa/master
-          
-          mkdir -p /home/runner/.config
+          WORK_DIR="/home/runner/pmb_work"
+          mkdir -p /home/runner/.config "$WORK_DIR"
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
           device = xiaomi-pipa
-          work = $WORK_PATH
+          work = $WORK_DIR
           jobs = $(nproc)
           repository = edge
           ui = plasma-desktop
           systemd = never
+          [providers]
+          firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
           EOF
+          
+          # Инициализация скачивает официальные порты
+          yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
+          
+          # ПОДМЕНА ПОРТОВ НА PIPA-PROJECT (Фиксы звука и тача)
+          # Находим, куда pmb положил порты и сбрасываем их на кастомные
+          PMB_P=$(python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg config pmaports)
+          cd "$PMB_P"
+          R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
+          git remote add pipa "$R" || true
+          git fetch pipa master
+          git reset --hard pipa/master
+          echo "8" > "$WORK_DIR/version"
 
-      - name: Build System
+      - name: Build system image
         run: |
-           PMB="python3 pmb/pmbootstrap.py -y"
+           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
            
-           # Собираем ядро pipa-project (у них пакет часто называется так)
+           # ПРИНУДИТЕЛЬНО собираем ядро из патченных исходников
            $PMB build linux-postmarketos-qcom-sm8250-pipa --force || $PMB build linux-xiaomi-pipa --force
            
+           # Установка системы (ядро подтянется локально собранное)
            $PMB install --password 147147 \
              --add linux-postmarketos-qcom-sm8250-pipa,linux-xiaomi-pipa \
+             --add postmarketos-ui-plasma-desktop \
              --add device-xiaomi-pipa-nonfree-firmware \
              --add msm-firmware-loader \
              --add alsa-ucm-conf \
-             --add mesa-dri-gallium
+             --add mesa-dri-gallium \
+             --add maliit-keyboard
            
            $PMB export
            
-           echo "🔍 ПРОВЕРКА /BOOT:"
+           # Проверка содержимого /boot прямо в консоли
+           echo "🔍 CHECKING /BOOT CONTENT:"
            $PMB chroot -r -- ls -lh /boot/
            
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
@@ -78,6 +85,6 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-plasma-final
+           name: xiaomi-pipa-plasma-edge
            path: out/*.img
            retention-days: 7
