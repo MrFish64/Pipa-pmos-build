@@ -1,3 +1,4 @@
+
 name: Build Xiaomi Pad 6 postmarketOS
 on:
   push:
@@ -16,38 +17,18 @@ jobs:
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
-      
       - name: Create workspace
         run: mkdir out
         
       - name: Install pmbootstrap
         run: |
-          # Прямая ссылка на официальный GitLab
-          git clone --depth=1 https://gitlab.postmarketos.org pmb
-          echo "$PWD/pmb" >> $GITHUB_PATH
-
-      - name: Clone and Patch pmaports
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
+          git clone --depth=1 "$U"
+          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
+      - name: Configure pmbootstrap & Patch pmaports
         run: |
-          WORK_DIR="$PWD/pmb_work"
-          mkdir -p "$WORK_DIR/cache_git"
-          
-          # Клонируем через стандартный протокол, используя токен из окружения
-          git clone --depth=1 https://x-access-token:${GH_TOKEN}@://github.com "$WORK_DIR/cache_git/pmaports"
-          
-          cd "$WORK_DIR/cache_git/pmaports"
-          # Подключаем pipa-project
-          git remote add pipa https://x-access-token:${GH_TOKEN}@://github.com
-          git fetch pipa master
-          git reset --hard pipa/master
-          echo "8" > "$WORK_DIR/version"
-
-      - name: Configure pmbootstrap
-        run: |
-          WORK_DIR="$PWD/pmb_work"
-          mkdir -p /home/runner/.config
-          
+          WORK_DIR="/home/runner/pmb_work"
+          mkdir -p /home/runner/.config "$WORK_DIR"
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmbootstrap]
           config_version = 3
@@ -57,14 +38,22 @@ jobs:
           repository = edge
           ui = plasma-desktop
           systemd = never
+          [providers]
+          firmware-xiaomi-pipa = device-xiaomi-pipa-nonfree-firmware
           EOF
-          
-          # Инициализация
-          python3 pmb/pmbootstrap.py -c /home/runner/.config/pmbootstrap.cfg init || true
 
-      - name: Build system image with Kernel
+          yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
+
+          cd "$WORK_DIR/cache_git/pmaports"
+          # Подключаем репозиторий с фиксами звука и тача
+          git remote add pipa https://github.com || true
+          git fetch pipa master
+          git reset --hard pipa/master
+          echo "8" > "$WORK_DIR/version"
+
+      - name: Build system image
         run: |
-           PMB="python3 pmb/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
+           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
            
            $PMB install --password 147147 \
              --add linux-postmarketos-qcom-sm8250-pipa,linux-xiaomi-pipa \
@@ -78,7 +67,6 @@ jobs:
            $PMB export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
