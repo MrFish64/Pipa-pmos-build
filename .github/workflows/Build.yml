@@ -1,98 +1,123 @@
-name: Build Xiaomi Pad 6 postmarketOS
+name: Build pipa images
 on:
-  push:
-    branches: [ main ]
+  push: # Build when push
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'  
+    - cron: '0 0 * * *'
 
 jobs:
   build-image:
+    strategy:
+      matrix:
+        version: ["default"]
+
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Check out build configurations
         uses: actions/checkout@v4
-
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
-      
-      - name: Create workspace
-        run: mkdir out
         
-      - name: Install pmbootstrap
+      - name: Create artifact directory
         run: |
-          U=$(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0b3MvcG1ib290c3RyYXAuZ2l0" | base64 -d)
-          git clone --depth=1 "$U"
-          echo "$PWD/pmbootstrap" >> $GITHUB_PATH
+            mkdir out
+        
+      - name: Substitute placeholders in configs
+        run: |
+           find . -type f -name "*.cfg" -exec sed -i "s|HOME|$(echo $HOME)|;s|NPROC|$(nproc)|" {} +
 
-      - name: Configure pmbootstrap & Force Patch Ports
+      - name: Install pmbootstrap from git
         run: |
-          WORK_DIR="/home/runner/pmb_work"
-          mkdir -p /home/runner/.config "$WORK_DIR"
-          
-          cat <<EOF > /home/runner/.config/pmbootstrap.cfg
-          [pmbootstrap]
-          config_version = 3
-          device = xiaomi-pipa
-          work = $WORK_DIR
-          jobs = $(nproc)
-          repository = edge
-          ui = plasma-desktop
-          systemd = never
-          EOF
-          
-          # 1. Инициализация (создает дерево папок)
-          yes "" | python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg init || true
-          
-          # 2. Узнаем путь к портам и патчим их
-          APORTS_PATH=$(python3 "$PWD/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg config aports)
-          cd "$APORTS_PATH"
-          R=$(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
-          git remote add pipa "$R" || true
+          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git
+          mkdir -p ~/.local/bin
+          ln -s "$PWD/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
+          pmbootstrap --version
+
+      - name: Set up pmaports
+        run: |
+          echo -e '\n\n' | pmbootstrap init || true
+          cd ~/.local/var/pmbootstrap/cache_git/pmaports
+          git remote add pipa https://github.com/pipa-project/pmaports-pipa.git || true
           git fetch pipa master
           git reset --hard pipa/master
+          pmbootstrap index --force
+          rm -rf ~/.local/var/pmbootstrap/packages/edge/aarch64/*.apk
           
-          # 3. КРИТИЧЕСКИЙ ШАГ: Пересобираем локальные индексы портов
-          # Это заставляет pmb перечитать все APKBUILD и увидеть новое ядро
-          echo "🔄 Reindexing aports..."
-          python3 "$GITHUB_WORKSPACE/pmbootstrap/pmbootstrap.py" -c /home/runner/.config/pmbootstrap.cfg index
-
-      - name: Build system image with Kernel
+      - name: Build the xiaomi-pipa without DE
         run: |
-           PMB="python3 $PWD/pmbootstrap/pmbootstrap.py -y -c /home/runner/.config/pmbootstrap.cfg --details-to-stdout"
-           
-           # Вручную вытаскиваем имя ядра из APKBUILD устройства, чтобы не ошибиться
-           APORTS_PATH=$($PMB config aports)
-           # Ищем строку pkgname в APKBUILD ядра внутри папки устройства
-           KERNEL_PKG=$(grep -r "pkgname=linux-" "$APORTS_PATH/device" | head -1 | cut -d'=' -f2 | tr -d '"' || echo "linux-xiaomi-pipa")
-           
-           echo "🎯 Targeted Kernel: $KERNEL_PKG"
+           cp xiaomi-pipa.cfg ~/.config/pmbootstrap_v3.cfg
+           pmbootstrap install --password 147147
+           pmbootstrap export
+           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
 
-           # Сначала принудительно собираем найденное ядро
-           $PMB build "$KERNEL_PKG" --force
-           
-           # Теперь устанавливаем систему (пакет ядра уже будет в локальном кэше)
-           $PMB install --password 147147 \
-             --add "$KERNEL_PKG" \
-             --add postmarketos-ui-plasma-desktop \
-             --add device-xiaomi-pipa-nonfree-firmware \
-             --add msm-firmware-loader \
-             --add alsa-ucm-conf \
-             --add mesa-dri-gallium
-           
-           $PMB export
-           
-           echo "🔍 CHECKING /BOOT CONTENT:"
-           $PMB chroot -r -- ls -lh /boot/
-           
+      - name: Breakpoint if tests failed for xiaomi-pipa without DE
+        if: failure()
+        uses: namespacelabs/breakpoint-action@v0
+        with:
+          duration: 30m
+          authorized-users: nixxizlab
+      
+      - name: Upload artifacts xiaomi-pipa without DE
+        uses: actions/upload-artifact@v4
+        with:
+           name: xiaomi-pipa-none
+           path: out/*.img*
+           retention-days: 7
+
+      - name: Build the xiaomi-pipa with KDE Plasma Desktop
+        run: |
+           yes | pmbootstrap zap
+           rm -r out/*
+           pmbootstrap install --password 147147 --add postmarketos-ui-plasma-desktop
+           cat /home/runner/.local/var/pmbootstrap/log.txt
+           pmbootstrap export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
 
-      - name: Upload artifacts
+      - name: Breakpoint if tests failed for xiaomi-pipa with KDE Plasma Desktop
+        if: failure()
+        uses: namespacelabs/breakpoint-action@v0
+        with:
+          duration: 30m
+          authorized-users: nixxizlab
+      
+      - name: Upload artifacts xiaomi-pipa with KDE Plasma Desktop
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-plasma-edge
-           path: out/*.img
+           name: xiaomi-pipa-plasma
+           path: out/*.img*
+           retention-days: 7
+            
+      - name: Build the xiaomi-pipa with GNOME
+        run: |
+           yes | pmbootstrap zap
+           rm -r out/*
+           pmbootstrap install --password 147147 --add postmarketos-ui-gnome
+           pmbootstrap export
+           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-gnome.img
+
+      - name: Breakpoint if tests failed for xiaomi-pipa with GNOME
+        if: failure()
+        uses: namespacelabs/breakpoint-action@v0
+        with:
+          duration: 30m
+          authorized-users: nixxizlab
+            
+      - name: Upload artifacts xiaomi-pipa with GNOME
+        uses: actions/upload-artifact@v4
+        with:
+           name: xiaomi-pipa-gnome
+           path: out/*.img*
            retention-days: 7
            
+      - name: Copy xiaomi-pipa kernel
+        run: |
+           rm -r out/*
+           cp ~/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/
+      
+      - name: Upload artifacts xiaomi-pipa kernel
+        uses: actions/upload-artifact@v4
+        with:
+           name: xiaomi-pipa-kernel
+           path: out/*.apk
+           retention-days: 7
