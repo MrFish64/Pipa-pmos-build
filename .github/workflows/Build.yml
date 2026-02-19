@@ -33,14 +33,27 @@ jobs:
 
       - name: Set up pmaports
         run: |
-          echo -e '\n\n' | pmbootstrap init || true
+          mkdir -p ~/.config
+          cat <<EOF > ~/.config/pmbootstrap.cfg
+          [pmbootstrap]
+          config_version = 3
+          device = xiaomi-pipa
+          work = /home/runner/.local/var/pmbootstrap
+          jobs = $(nproc)
+          repository = edge
+          is_default_channel = True
+          ui = plasma-desktop
+          systemd = never
+          EOF
+          pmbootstrap init
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
-          git remote add pipa https://github.com/pipa-project/pmaports-pipa.git || true
+          git remote add pipa https://github.com || true
           git fetch pipa master
           git reset --hard pipa/master
-          pmbootstrap index --force
-          rm -rf ~/.local/var/pmbootstrap/packages/edge/aarch64/*.apk
-          
+
+          # 4. Правильная команда индексации (БЕЗ --force)
+          pmbootstrap index
+
       - name: Build the xiaomi-pipa without DE
         run: |
            cp xiaomi-pipa.cfg ~/.config/pmbootstrap_v3.cfg
