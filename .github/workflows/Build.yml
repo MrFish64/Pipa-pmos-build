@@ -1,9 +1,9 @@
-name: Build pipa images
+name: Xiaomi Pad 6 postmarketOS
 on:
   push: # Build when push
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * 5' # Start build every friday
 
 jobs:
   build-image:
@@ -15,6 +15,9 @@ jobs:
     steps:
       - name: Check out build configurations
         uses: actions/checkout@v4
+
+      - name: Set current date variable
+        run: echo "CURRENT_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
         
       - name: Create artifact directory
         run: |
@@ -33,26 +36,12 @@ jobs:
 
       - name: Set up pmaports
         run: |
-          mkdir -p ~/.config
-          cat <<EOF > ~/.config/pmbootstrap.cfg
-          [pmbootstrap]
-          config_version = 3
-          device = xiaomi-pipa
-          work = /home/runner/.local/var/pmbootstrap
-          jobs = $(nproc)
-          repository = edge
-          is_default_channel = True
-          ui = plasma-desktop
-          systemd = never
-          EOF
-          pmbootstrap init
+          echo -e '\n\n' | pmbootstrap init || true
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
-          git remote add pipa https://github.com || true
-          git fetch pipa master
-          git reset --hard pipa/master
-
-          # 4. Правильная команда индексации (БЕЗ --force)
-          pmbootstrap index
+          git remote
+          git remote add pipa https://github.com/rifux/pipa-pmaports.git
+          git fetch pipa v25.06
+          git reset --hard pipa/v25.06
 
       - name: Build the xiaomi-pipa without DE
         run: |
@@ -67,12 +56,12 @@ jobs:
         uses: namespacelabs/breakpoint-action@v0
         with:
           duration: 30m
-          authorized-users: nixxizlab
+          authorized-users: rifux
       
       - name: Upload artifacts xiaomi-pipa without DE
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-none
+           name: xiaomi-pipa-none_${{ env.CURRENT_DATE }}
            path: out/*.img*
            retention-days: 7
 
@@ -91,12 +80,12 @@ jobs:
         uses: namespacelabs/breakpoint-action@v0
         with:
           duration: 30m
-          authorized-users: nixxizlab
+          authorized-users: rifux
       
       - name: Upload artifacts xiaomi-pipa with KDE Plasma Desktop
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-plasma
+           name: xiaomi-pipa-plasma_${{ env.CURRENT_DATE }}
            path: out/*.img*
            retention-days: 7
             
@@ -114,23 +103,29 @@ jobs:
         uses: namespacelabs/breakpoint-action@v0
         with:
           duration: 30m
-          authorized-users: nixxizlab
+          authorized-users: rifux
             
       - name: Upload artifacts xiaomi-pipa with GNOME
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-gnome
+           name: xiaomi-pipa-gnome_${{ env.CURRENT_DATE }}
            path: out/*.img*
            retention-days: 7
-           
+                       
       - name: Copy xiaomi-pipa kernel
         run: |
            rm -r out/*
-           cp ~/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/
+           cp ~/.local/var/pmbootstrap/packages/v25.06/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/
       
       - name: Upload artifacts xiaomi-pipa kernel
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-kernel
+           name: xiaomi-pipa-kernel_${{ env.CURRENT_DATE }}
            path: out/*.apk
            retention-days: 7
+
+
+
+        
+
+        
