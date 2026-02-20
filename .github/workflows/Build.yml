@@ -3,7 +3,7 @@ on:
   push: # Build when push
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * 5' # Start build every friday
+    - cron: '0 0 * * *' 
 
 jobs:
   build-image:
@@ -39,9 +39,10 @@ jobs:
           echo -e '\n\n' | pmbootstrap init || true
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
           git remote
-          git remote add pipa https://github.com/rifux/pipa-pmaports.git
-          git fetch pipa v25.06
-          git reset --hard pipa/v25.06
+          git remote add pipa https://github.com/pipa-project/pmaports-pipa.git
+          DEFAULT_BRANCH=$(git remote show pipa | awk '/HEAD branch/ {print $NF}')
+          git fetch pipa $DEFAULT_BRANCH
+          git reset --hard pipa/$DEFAULT_BRANCH
 
       - name: Build the xiaomi-pipa without DE
         run: |
