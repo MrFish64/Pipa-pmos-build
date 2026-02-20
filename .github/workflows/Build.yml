@@ -36,13 +36,18 @@ jobs:
 
       - name: Set up pmaports
         run: |
-          pmbootstrap init --device=xiaomi-pipa --ui=console --channel=edge --work=~/.local/var/pmbootstrap
+          mkdir -p ~/.local/var/pmbootstrap
+          pmbootstrap config work ~/.local/var/pmbootstrap
+          pmbootstrap config device xiaomi-pipa
+          pmbootstrap config ui console
+          pmbootstrap config channel edge
+          pmbootstrap config extra_packages "parted,cfdisk,gparted"
+          pmbootstrap init --noprompt || true
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
           git remote add pipa https://github.com/pipa-project/pmaports-pipa.git || true
           git fetch pipa master
           git reset --hard pipa/master
           pmbootstrap index
-
 
       - name: Build the xiaomi-pipa without DE
         run: |
