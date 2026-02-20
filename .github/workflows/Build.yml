@@ -36,18 +36,28 @@ jobs:
 
       - name: Set up pmaports
         run: |
+          mkdir -p ~/.config
+          cat <<EOF > ~/.config/pmbootstrap.cfg
+          [pmbootstrap]
+          aports = $HOME/.local/var/pmbootstrap/cache_git/pmaports
+          device = xiaomi-pipa
+          extra_packages = parted,cfdisk,gparted
+          is_default_channel = False
+          systemd = never
+          ui = console
+          user = user
+          work = $HOME/.local/var/pmbootstrap
+          jobs = $(nproc)
+          channel = edge
+          EOF
           mkdir -p ~/.local/var/pmbootstrap
-          pmbootstrap config work ~/.local/var/pmbootstrap
-          pmbootstrap config device xiaomi-pipa
-          pmbootstrap config ui console
-          pmbootstrap config channel edge
-          pmbootstrap config extra_packages "parted,cfdisk,gparted"
-          pmbootstrap init --noprompt || true
+          pmbootstrap init --noprompt
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
           git remote add pipa https://github.com/pipa-project/pmaports-pipa.git || true
           git fetch pipa master
           git reset --hard pipa/master
           pmbootstrap index
+
 
       - name: Build the xiaomi-pipa without DE
         run: |
