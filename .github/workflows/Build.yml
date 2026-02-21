@@ -31,21 +31,13 @@ jobs:
           pmbootstrap --version
       - name: Set up pmaports
         run: |
-          mkdir -p ~/.local/var/pmbootstrap
-          pmbootstrap config work ~/.local/var/pmbootstrap
-          pmbootstrap config jobs $(nproc)
-          pmbootstrap config device xiaomi-pipa
-          pmbootstrap config extra_packages postmarketos-base
-          pmbootstrap config mirror_alpine http://dl-cdn.alpinelinux.org
-          mkdir -p ~/.local/var/pmbootstrap/cache_git
-          git clone --depth=1 https://gitlab.postmarketos.org ~/.local/var/pmbootstrap/cache_git/pmaports
+          echo -e '\n\n' | pmbootstrap init || true
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
           git remote
           git remote add pipa https://github.com/pipa-project/pmaports-pipa.git
           DEFAULT_BRANCH=$(git remote show pipa | awk '/HEAD branch/ {print $NF}')
           git fetch pipa $DEFAULT_BRANCH
           git reset --hard pipa/$DEFAULT_BRANCH
-          pmbootstrap index
       - name: Build the xiaomi-pipa without DE
         run: |
            cp xiaomi-pipa.cfg ~/.config/pmbootstrap_v3.cfg
