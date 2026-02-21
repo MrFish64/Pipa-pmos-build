@@ -1,9 +1,9 @@
-name: Xiaomi Pad 6 postmarketOS
+name: Build pipa images
 on:
   push: # Build when push
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *' 
+    - cron: '0 0 * * 5' # Start build every friday
 
 jobs:
   build-image:
@@ -15,9 +15,6 @@ jobs:
     steps:
       - name: Check out build configurations
         uses: actions/checkout@v4
-
-      - name: Set current date variable
-        run: echo "CURRENT_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
         
       - name: Create artifact directory
         run: |
@@ -26,114 +23,96 @@ jobs:
       - name: Substitute placeholders in configs
         run: |
            find . -type f -name "*.cfg" -exec sed -i "s|HOME|$(echo $HOME)|;s|NPROC|$(nproc)|" {} +
-
       - name: Install pmbootstrap from git
         run: |
           git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git
           mkdir -p ~/.local/bin
           ln -s "$PWD/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
           pmbootstrap --version
-
       - name: Set up pmaports
         run: |
-          mkdir -p ~/.config
-          cat <<EOF > ~/.config/pmbootstrap.cfg
-          [pmbootstrap]
-          aports = $HOME/.local/var/pmbootstrap/cache_git/pmaports
-          device = xiaomi-pipa
-          extra_packages = parted,cfdisk,gparted
-          is_default_channel = False
-          systemd = never
-          ui = console
-          user = user
-          work = $HOME/.local/var/pmbootstrap
-          jobs = $(nproc)
-          channel = edge
-          EOF
-          mkdir -p ~/.local/var/pmbootstrap
-          pmbootstrap init --noprompt
+          pmbootstrap init --non-interactive --device xiaomi-pipa --ui console
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
-          git remote add pipa https://github.com/pipa-project/pmaports-pipa.git || true
-          git fetch pipa master
-          git reset --hard pipa/master
+          git remote
+          git remote add pipa https://github.com/pipa-project/pmaports-pipa.git
+          DEFAULT_BRANCH=$(git remote show pipa | awk '/HEAD branch/ {print $NF}')
+          git fetch pipa $DEFAULT_BRANCH
+          git reset --hard pipa/$DEFAULT_BRANCH
           pmbootstrap index
-
-
       - name: Build the xiaomi-pipa without DE
         run: |
-           pmbootstrap install --password 147147 --no-fde
+           cp xiaomi-pipa.cfg ~/.config/pmbootstrap_v3.cfg
+           pmbootstrap install --password 147147
            pmbootstrap export
-           cp /tmp/postmarketos-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketos-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
-
-
+           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
       - name: Breakpoint if tests failed for xiaomi-pipa without DE
         if: failure()
         uses: namespacelabs/breakpoint-action@v0
         with:
           duration: 30m
-          authorized-users: rifux
+          authorized-users: nixxizlab
       
       - name: Upload artifacts xiaomi-pipa without DE
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-none_${{ env.CURRENT_DATE }}
+           name: xiaomi-pipa-none
            path: out/*.img*
            retention-days: 7
 
       - name: Build the xiaomi-pipa with KDE Plasma Desktop
         run: |
+           yes | pmbootstrap zap
            rm -r out/*
-           pmbootstrap install --password 147147 --add postmarketos-ui-plasma-desktop  --no-fde
+           pmbootstrap install --password 147147 --add postmarketos-ui-plasma-desktop
            cat /home/runner/.local/var/pmbootstrap/log.txt
            pmbootstrap export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
-
       - name: Breakpoint if tests failed for xiaomi-pipa with KDE Plasma Desktop
         if: failure()
         uses: namespacelabs/breakpoint-action@v0
         with:
           duration: 30m
-          authorized-users: rifux
+          authorized-users: nixxizlab
       
       - name: Upload artifacts xiaomi-pipa with KDE Plasma Desktop
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-plasma_${{ env.CURRENT_DATE }}
+           name: xiaomi-pipa-plasma
            path: out/*.img*
            retention-days: 7
             
       - name: Build the xiaomi-pipa with GNOME
         run: |
+           yes | pmbootstrap zap
            rm -r out/*
-           pmbootstrap install --password 147147 --add postmarketos-ui-gnome  --no-fde
+           pmbootstrap install --password 147147 --add postmarketos-ui-gnome
            pmbootstrap export
            cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-gnome.img
-
       - name: Breakpoint if tests failed for xiaomi-pipa with GNOME
         if: failure()
         uses: namespacelabs/breakpoint-action@v0
         with:
           duration: 30m
-          authorized-users: rifux
+          authorized-users: nixxizlab
             
       - name: Upload artifacts xiaomi-pipa with GNOME
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-gnome_${{ env.CURRENT_DATE }}
+           name: xiaomi-pipa-gnome
            path: out/*.img*
            retention-days: 7
-                       
+           
       - name: Copy xiaomi-pipa kernel
         run: |
            rm -r out/*
-           cp ~/.local/var/pmbootstrap/packages/*/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/
+           cp ~/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/
       
       - name: Upload artifacts xiaomi-pipa kernel
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-kernel_${{ env.CURRENT_DATE }}
+           name: xiaomi-pipa-kernel
            path: out/*.apk
            retention-days: 7
