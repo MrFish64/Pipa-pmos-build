@@ -31,10 +31,14 @@ jobs:
           pmbootstrap --version
       - name: Set up pmaports
         run: |
-          pmbootstrap init --mirror-pmos http://mirror.postmarketos.org 
+          mkdir -p ~/.local/var/pmbootstrap
+          pmbootstrap config work ~/.local/var/pmbootstrap
+          pmbootstrap config jobs $(nproc)
           pmbootstrap config device xiaomi-pipa
           pmbootstrap config extra_packages postmarketos-base
-          pmbootstrap config ui console
+          pmbootstrap config mirror_alpine http://dl-cdn.alpinelinux.org
+          mkdir -p ~/.local/var/pmbootstrap/cache_git
+          git clone --depth=1 https://gitlab.postmarketos.org ~/.local/var/pmbootstrap/cache_git/pmaports
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
           git remote
           git remote add pipa https://github.com/pipa-project/pmaports-pipa.git
