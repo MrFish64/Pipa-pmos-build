@@ -31,7 +31,10 @@ jobs:
           pmbootstrap --version
       - name: Set up pmaports
         run: |
-          pmbootstrap init --non-interactive --device xiaomi-pipa --ui console
+          pmbootstrap init --mirror-pmos http://mirror.postmarketos.org 
+          pmbootstrap config device xiaomi-pipa
+          pmbootstrap config extra_packages postmarketos-base
+          pmbootstrap config ui console
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
           git remote
           git remote add pipa https://github.com/pipa-project/pmaports-pipa.git
