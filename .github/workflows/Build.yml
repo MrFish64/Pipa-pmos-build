@@ -85,13 +85,14 @@ jobs:
           # Индексация
           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg checksum device-xiaomi-pipa
           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg index
-
+          
       - name: Build Plasma Mobile
         run: |
            sed -i 's/^ui =.*/ui = plasma-mobile/' /home/runner/.config/pmbootstrap.cfg
            pmbootstrap -c /home/runner/.config/pmbootstrap.cfg -y zap
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --add gparted,parted
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export
+           # ДОБАВИЛИ --device=pipa ЗДЕСЬ
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --device=pipa --add gparted,parted
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export --device=pipa
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-plasma.img
 
@@ -99,10 +100,12 @@ jobs:
         run: |
            sed -i 's/^ui =.*/ui = gnome/' /home/runner/.config/pmbootstrap.cfg
            pmbootstrap -c /home/runner/.config/pmbootstrap.cfg -y zap
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --add gparted,parted,nano
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export
+           # И ЗДЕСЬ
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --device=pipa --add gparted,parted,nano
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export --device=pipa
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-gnome.img
+
 
       - name: Upload
         uses: actions/upload-artifact@v4
