@@ -31,7 +31,7 @@ jobs:
           pmbootstrap --version
       - name: Set up pmaports
         run: |
-          echo -e '\n\n' | pmbootstrap init || true
+          pmbootstrap init --path /home/runner/.local/var/pmbootstrap --channel edge --vendor xiaomi --device pipa --ui console --systemd never --confirm-config
           cd ~/.local/var/pmbootstrap/cache_git/pmaports
           git remote
           git remote add pipa https://github.com/pipa-project/pmaports-pipa.git
