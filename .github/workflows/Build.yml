@@ -1,40 +1,41 @@
 name: Build pipa images
 on:
-  push: # Build when push
+  push:
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * 5' # Start build every friday
 
 jobs:
   build-image:
-    strategy:
-      matrix:
-        version: ["default"]
-
     runs-on: ubuntu-latest
     steps:
-      - name: Check out build configurations
+      - name: Checkout
         uses: actions/checkout@v4
-        
-      - name: Create artifact directory
+
+      - name: Preparation
+        run: mkdir -p out
+
+      - name: Install pmbootstrap
         run: |
-            mkdir out
-        
-      - name: Substitute placeholders in configs
-        run: |
-           find . -type f -name "*.cfg" -exec sed -i "s|HOME|$(echo $HOME)|;s|NPROC|$(nproc)|" {} +
-      - name: Install pmbootstrap from git
-        run: |
-          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git
+          # Ссылка на pmbootstrap: https://gitlab.postmarketos.org
+          git clone --depth=1 $(echo "68747470733a2f2f6769746c61622e706f73746d61726b65746f732e6f72672f706f73746d61726b65744f532f706d626f6f7473747261702e676974" | xxd -r -p) pmb-git
           mkdir -p ~/.local/bin
-          ln -s "$PWD/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
-          pmbootstrap --version
-      
-      - name: Set up pmaports
+          ln -s "$GITHUB_WORKSPACE/pmb-git/pmbootstrap.py" ~/.local/bin/pmbootstrap
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Setup Environment (Hex Mirrors + Fixes)
         run: |
-          # 1. Генерируем УЛЬТИМАТИВНЫЙ КОНФИГ V3
-          mkdir -p ~/.config
-          cat <<EOF > ~/.config/pmbootstrap.cfg
+          mkdir -p /home/runner/.config
+          
+          # РАСШИФРОВКА ПРАВИЛЬНЫХ ЗЕРКАЛ (с полными путями)
+          # Alpine: http://dl-cdn.alpinelinux.org
+          # pMOS: http://mirror.postmarketos.org
+          ALP_HEX="687474703a2f2f646c2d63646e2e616c70696e656c696e75782e6f72672f616c70696e652f"
+          PMO_HEX="687474703a2f2f6d6972726f722e706f73746d61726b65746f732e6f72672f706f73746d61726b65746f732f"
+          
+          ALPINE_URL=$(echo "$ALP_HEX" | xxd -r -p)
+          PMOS_URL=$(echo "$PMO_HEX" | xxd -r -p)
+          
+          # ГЕНЕРАЦИЯ КОНФИГА V3
+          cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmb]
           config_version = 3
           aports = /home/runner/.local/var/pmbootstrap/cache_git/pmaports
@@ -42,122 +43,69 @@ jobs:
           jobs = $(nproc)
           user = runner
           native_arch = x86_64
-
           [channels]
           channel = edge
           is_default_channel = False
-
           [device]
           device = pipa
           vendor = xiaomi
           architecture = aarch64
-
           [ui]
           ui = console
           systemd = never
-
           [install]
           boot_size = 256
           extra_space = 2048
-          password = 147147     
+          password = 147147
+          [mirrors]
+          alpine = $ALPINE_URL
+          postmarketos = $PMOS_URL
           EOF
+          
+          # Дубликат для 3.9.0
+          cp /home/runner/.config/pmbootstrap.cfg /home/runner/.config/pmbootstrap_v3.cfg
 
-          # 2. КЛОНИРУЕМ ЕГО В ТРИ МЕСТА (на всякий случай для 3.9.0)
-          cp ~/.config/pmbootstrap.cfg ~/.config/pmbootstrap_v3.cfg
-          cp ~/.config/pmbootstrap.cfg ~/.config/pmbootstrap_v3.cfg.bak
-
-          # 3. КЛОН ПОРТОВ (Hex: https://gitlab.postmarketos.org)
+          # ФИКС МИГРАЦИИ (v8)
+          mkdir -p /home/runner/.local/var/pmbootstrap/chroot_native
+          echo "8" > /home/runner/.local/var/pmbootstrap/version
+          
+          # Клон pmaports (https://gitlab.postmarketos.org)
           mkdir -p /home/runner/.local/var/pmbootstrap/cache_git
           git clone --depth=1 $(echo "68747470733a2f2f6769746c61622e706f73746d61726b65746f732e6f72672f706f73746d61726b65744f532f706d61706f7274732e676974" | xxd -r -p) /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           
           cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
-          
-          # 4. НАКАТЫВАЕМ ПИПУ (Hex: https://github.com)
+          # Клон pipa (https://github.com)
           git remote add pipa $(echo "68747470733a2f2f6769746875622e636f6d2f706970612d70726f6a6563742f706d61706f7274732d706970612e676974" | xxd -r -p)
           git fetch pipa master && git reset --hard pipa/master
-
-          # 5. ТЕ САМЫЕ СТРОКИ ДЛЯ ФИКСА EXIT CODE 1 (nofde и дубликаты)
+          
+          # ФИКСЫ: nofde и дубликаты (Exit code 5)
           rm -rf main/postmarketos-base-nofde
           find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i 's/postmarketos-base-nofde/postmarketos-base/g;s/doas-sudo-shim,//g;s/font-twemoji,//g;s/font-droid-nonlatin,//g;s/font-droid,//g' {} +
           
-          # 6. РЕГИСТРИРУЕМ С ЯВНЫМ УКАЗАНИЕМ КОНФИГА
-          pmbootstrap -c ~/.config/pmbootstrap.cfg checksum device-xiaomi-pipa
-          pmbootstrap -c ~/.config/pmbootstrap.cfg index
+          # Индексация
+          pmbootstrap -c /home/runner/.config/pmbootstrap.cfg checksum device-xiaomi-pipa
+          pmbootstrap -c /home/runner/.config/pmbootstrap.cfg index
 
-      - name: Build the xiaomi-pipa without DE
+      - name: Build Plasma Mobile
         run: |
-           cp xiaomi-pipa.cfg ~/.config/pmbootstrap_v3.cfg
-           pmbootstrap install --password 147147
-           pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
-      - name: Breakpoint if tests failed for xiaomi-pipa without DE
-        if: failure()
-        uses: namespacelabs/breakpoint-action@v0
-        with:
-          duration: 30m
-          authorized-users: nixxizlab
-      
-      - name: Upload artifacts xiaomi-pipa without DE
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-none
-           path: out/*.img*
-           retention-days: 7
+           sed -i 's/^ui =.*/ui = plasma-mobile/' /home/runner/.config/pmbootstrap.cfg
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg -y zap
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --add gparted,parted
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export
+           cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-plasma.img
 
-      - name: Build the xiaomi-pipa with KDE Plasma Desktop
+      - name: Build GNOME Desktop
         run: |
-           yes | pmbootstrap zap
-           rm -r out/*
-           pmbootstrap install --password 147147 --add postmarketos-ui-plasma-desktop
-           cat /home/runner/.local/var/pmbootstrap/log.txt
-           pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
-      - name: Breakpoint if tests failed for xiaomi-pipa with KDE Plasma Desktop
-        if: failure()
-        uses: namespacelabs/breakpoint-action@v0
-        with:
-          duration: 30m
-          authorized-users: nixxizlab
-      
-      - name: Upload artifacts xiaomi-pipa with KDE Plasma Desktop
+           sed -i 's/^ui =.*/ui = gnome/' /home/runner/.config/pmbootstrap.cfg
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg -y zap
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --add gparted,parted,nano
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export
+           cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-gnome.img
+
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-plasma
-           path: out/*.img*
-           retention-days: 7
-            
-      - name: Build the xiaomi-pipa with GNOME
-        run: |
-           yes | pmbootstrap zap
-           rm -r out/*
-           pmbootstrap install --password 147147 --add postmarketos-ui-gnome
-           pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-gnome.img
-      - name: Breakpoint if tests failed for xiaomi-pipa with GNOME
-        if: failure()
-        uses: namespacelabs/breakpoint-action@v0
-        with:
-          duration: 30m
-          authorized-users: nixxizlab
-            
-      - name: Upload artifacts xiaomi-pipa with GNOME
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-gnome
-           path: out/*.img*
-           retention-days: 7
-           
-      - name: Copy xiaomi-pipa kernel
-        run: |
-           rm -r out/*
-           cp ~/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/
-      
-      - name: Upload artifacts xiaomi-pipa kernel
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-kernel
-           path: out/*.apk
-           retention-days: 7
+           name: xiaomi-pipa-builds
+           path: out/*.img
