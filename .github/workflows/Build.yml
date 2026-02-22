@@ -24,16 +24,13 @@ jobs:
         run: |
           mkdir -p ~/.config
           
-          # Жесткий конфиг: pipa вместо qemu, systemd выключен
+          # НОВЫЙ ФОРМАТ КОНФИГА v3 (pmbootstrap 3.9.0+)
           cat <<EOF > ~/.config/pmbootstrap.cfg
-          [pmbootstrap]
+          [pmb]
           aports = /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           work = /home/runner/.local/var/pmbootstrap
           jobs = $(nproc)
-          mirror_alpine = http://mirror.postmarketos.org
-          mirrors_postmarketos = http://mirror.postmarketos.org
           channel = edge
-          vendor = xiaomi
           device = pipa
           ui = console
           user = runner
@@ -41,6 +38,10 @@ jobs:
           extra_space = 2048
           systemd = never
           is_default_channel = False
+          
+          [mirrors]
+          alpine = http://mirror.postmarketos.org
+          postmarketos = http://mirror.postmarketos.org
           EOF
 
           mkdir -p /home/runner/.local/var/pmbootstrap/cache_git
@@ -51,7 +52,7 @@ jobs:
           git fetch pipa master
           git reset --hard pipa/master
           
-          # Фикс зависимости nofde и дубликатов (exit code 5)
+          # ФИКСЫ: nofde и дубликаты
           find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i "s/$(echo "cG9zdG1hcmtldG9zLWJhc2Utbm9mZGU=" | base64 -d)/$(echo "cG9zdG1hcmtldG9zLWJhc2U=" | base64 -d)/g" {} +
           sed -i 's/doas-sudo-shim,//g;s/font-twemoji,//g' device/*/device-xiaomi-pipa/deviceinfo || true
           
@@ -59,10 +60,19 @@ jobs:
           pmbootstrap checksum device-xiaomi-pipa-nonfree-firmware
           pmbootstrap index
 
-      - name: Build GNOME Image
+      - name: Build Plasma
         run: |
            pmbootstrap zap -y
-           # Сборка образа pipa (aarch64) с GNOME
+           # Собираем Plasma Mobile (без FDE)
+           pmbootstrap install --password 147147 --ui plasma-mobile --no-fde --add gparted,parted
+           pmbootstrap export
+           cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-plasma.img
+
+      - name: Build GNOME
+        run: |
+           pmbootstrap zap -y
+           # Собираем GNOME (без FDE)
            pmbootstrap install --password 147147 --ui gnome --no-fde --add gparted,parted,nano
            pmbootstrap export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
@@ -78,6 +88,6 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-gnome
+           name: xiaomi-pipa-builds
            path: out/*
            retention-days: 7
