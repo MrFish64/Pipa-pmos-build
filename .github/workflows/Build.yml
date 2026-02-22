@@ -15,7 +15,7 @@ jobs:
 
       - name: Install pmbootstrap
         run: |
-          # Ссылка на pmbootstrap: https://gitlab.postmarketos.org
+          # https://gitlab.postmarketos.org
           git clone --depth=1 $(echo "68747470733a2f2f6769746c61622e706f73746d61726b65746f732e6f72672f706f73746d61726b65744f532f706d626f6f7473747261702e676974" | xxd -r -p) pmb-git
           mkdir -p ~/.local/bin
           ln -s "$GITHUB_WORKSPACE/pmb-git/pmbootstrap.py" ~/.local/bin/pmbootstrap
@@ -25,14 +25,9 @@ jobs:
         run: |
           mkdir -p /home/runner/.config
           
-          # РАСШИФРОВКА ПРАВИЛЬНЫХ ЗЕРКАЛ (с полными путями)
-          # Alpine: http://dl-cdn.alpinelinux.org
-          # pMOS: http://mirror.postmarketos.org
-          ALP_HEX="687474703a2f2f646c2d63646e2e616c70696e656c696e75782e6f72672f616c70696e652f"
-          PMO_HEX="687474703a2f2f6d6972726f722e706f73746d61726b65746f732e6f72672f706f73746d61726b65746f732f"
-          
-          ALPINE_URL=$(echo "$ALP_HEX" | xxd -r -p)
-          PMOS_URL=$(echo "$PMO_HEX" | xxd -r -p)
+          # ПРАВИЛЬНЫЕ ЗЕРКАЛА
+          ALP_URL=$(echo "687474703a2f2f646c2d63646e2e616c70696e656c696e75782e6f72672f616c70696e652f" | xxd -r -p)
+          PMO_URL=$(echo "687474703a2f2f6d6972726f722e706f73746d61726b65746f732e6f72672f706f73746d61726b65746f732f" | xxd -r -p)
           
           # ГЕНЕРАЦИЯ КОНФИГА V3
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
@@ -58,54 +53,45 @@ jobs:
           extra_space = 2048
           password = 147147
           [mirrors]
-          alpine = $ALPINE_URL
-          postmarketos = $PMOS_URL
+          alpine = $ALP_URL
+          postmarketos = $PMO_URL
           EOF
           
-          # Дубликат для 3.9.0
           cp /home/runner/.config/pmbootstrap.cfg /home/runner/.config/pmbootstrap_v3.cfg
-
-          # ФИКС МИГРАЦИИ (v8)
           mkdir -p /home/runner/.local/var/pmbootstrap/chroot_native
           echo "8" > /home/runner/.local/var/pmbootstrap/version
           
-          # Клон pmaports (https://gitlab.postmarketos.org)
-          mkdir -p /home/runner/.local/var/pmbootstrap/cache_git
           git clone --depth=1 $(echo "68747470733a2f2f6769746c61622e706f73746d61726b65746f732e6f72672f706f73746d61726b65744f532f706d61706f7274732e676974" | xxd -r -p) /home/runner/.local/var/pmbootstrap/cache_git/pmaports
-          
           cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
-          # Клон pipa (https://github.com)
           git remote add pipa $(echo "68747470733a2f2f6769746875622e636f6d2f706970612d70726f6a6563742f706d61706f7274732d706970612e676974" | xxd -r -p)
           git fetch pipa master && git reset --hard pipa/master
           
-          # ФИКСЫ: nofde и дубликаты (Exit code 5)
           rm -rf main/postmarketos-base-nofde
-          find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i 's/postmarketos-base-nofde/postmarketos-base/g;s/doas-sudo-shim,//g;s/font-twemoji,//g;s/font-droid-nonlatin,//g;s/font-droid,//g' {} +
+          find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i 's/postmarketos-base-nofde/postmarketos-base/g;s/doas-sudo-shim,//g;s/font-twemoji,//g;s/font-droid-nonlatin,//g' {} +
           
-          # Индексация
           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg checksum device-xiaomi-pipa
           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg index
-          
+
       - name: Build Plasma Mobile
         run: |
+           # Фиксим UI и Device в конфиге
            sed -i 's/^ui =.*/ui = plasma-mobile/' /home/runner/.config/pmbootstrap.cfg
+           sed -i 's/^device =.*/device = pipa/' /home/runner/.config/pmbootstrap.cfg
            pmbootstrap -c /home/runner/.config/pmbootstrap.cfg -y zap
-           # ДОБАВИЛИ --device=pipa ЗДЕСЬ
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --device=pipa --add gparted,parted
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export --device=pipa
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --add gparted,parted
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-plasma.img
 
       - name: Build GNOME Desktop
         run: |
            sed -i 's/^ui =.*/ui = gnome/' /home/runner/.config/pmbootstrap.cfg
+           sed -i 's/^device =.*/device = pipa/' /home/runner/.config/pmbootstrap.cfg
            pmbootstrap -c /home/runner/.config/pmbootstrap.cfg -y zap
-           # И ЗДЕСЬ
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --device=pipa --add gparted,parted,nano
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export --device=pipa
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --add gparted,parted,nano
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-gnome.img
-
 
       - name: Upload
         uses: actions/upload-artifact@v4
