@@ -17,15 +17,15 @@ jobs:
         
       - name: Install pmbootstrap
         run: |
-          git clone --depth=1 $(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
+          # Клонируем pmbootstrap в папку pmb-git
+          git clone --depth=1 $(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d) pmb-git
           mkdir -p ~/.local/bin
-          ln -s "$GITHUB_WORKSPACE/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
-          # Добавляем в PATH для всех следующих шагов
+          ln -s "$GITHUB_WORKSPACE/pmb-git/pmbootstrap.py" ~/.local/bin/pmbootstrap
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Setup pmaports
         run: |
-          # В этом шаге вызываем через полный путь, так как PATH еще не обновился
+          # Используем прямой путь, так как PATH обновится в следующем шаге
           PMB="$HOME/.local/bin/pmbootstrap"
           
           $PMB init --path /home/runner/.local/var/pmbootstrap --channel edge --vendor xiaomi --device pipa --ui console --systemd never --confirm-config
