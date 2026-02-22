@@ -29,9 +29,10 @@ jobs:
           mkdir -p ~/.local/bin
           ln -s "$PWD/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
           pmbootstrap --version
+      
       - name: Set up pmaports
         run: |
-          # Вместо init создаем конфиг, чтобы не было qemu и systemd
+          # 1. Создаем конфиг v3
           mkdir -p ~/.config
           cat <<EOF > ~/.config/pmbootstrap.cfg
           [pmb]
@@ -49,18 +50,24 @@ jobs:
           ui = console
           systemd = never
           EOF
+
+          # 2. Клонируем базу (Hex для https://gitlab.postmarketos.org)
           mkdir -p /home/runner/.local/var/pmbootstrap/cache_git
-          git clone --depth=1 https://gitlab.postmarketos.org/postarketOS/pmaports.git /home/runner/.local/var/pmbootstrap/cache_git/pmaports
+          git clone --depth=1 $(echo "68747470733a2f2f6769746c61622e706f73746d61726b65746f732e6f72672f706f73746d61726b65744f532f706d61706f7274732e676974" | xxd -r -p) /home/runner/.local/var/pmbootstrap/cache_git/pmaports
+          
           cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
-          git remote add pipa https://github.com/pipa-project/pmaports-pipa.git
+          
+          # 3. Накатываем пипу (Hex для https://github.com)
+          git remote add pipa $(echo "68747470733a2f2f6769746875622e636f6d2f706970612d70726f6a6563742f706d61706f7274732d706970612e676974" | xxd -r -p)
           git fetch pipa master
           git reset --hard pipa/master
 
-          # ЭТИ СТРОКИ ЧИНЯТ EXIT CODE 1
+          # 4. ФИКСЫ EXIT CODE 1
           rm -rf main/postmarketos-base-nofde
           find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i 's/postmarketos-base-nofde/postmarketos-base/g;s/doas-sudo-shim,//g;s/font-twemoji,//g;s/font-droid-nonlatin,//g;s/font-droid,//g' {} +
           pmbootstrap checksum device-xiaomi-pipa
           pmbootstrap index
+
 
 
       - name: Build the xiaomi-pipa without DE
