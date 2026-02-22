@@ -2,84 +2,58 @@ name: Build pipa images
 on:
   push:
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * 5'
 
 jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out build configurations
+      - name: Check out repo
         uses: actions/checkout@v4
-        
-      - name: Create artifact directory
-        run: mkdir out
         
       - name: Install pmbootstrap
         run: |
-          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git
+          git clone --depth=1 https://gitlab.postmarketos.org
           mkdir -p ~/.local/bin
           ln -s "$PWD/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Set up pmbootstrap and pmaports
+      - name: Force Init pmbootstrap
         run: |
-          # Настройка конфига без интерактива
-          pmbootstrap config work ~/.local/var/pmbootstrap
-          pmbootstrap config device xiaomi-pipa
-          pmbootstrap config jobs $(nproc)
-          mkdir -p ~/.local/var/pmbootstrap/cache_git
-          git clone --depth=1 https://gitlab.postmarketos.org ~/.local/var/pmbootstrap/cache_git/pmaports
-          cd ~/.local/var/pmbootstrap/cache_git/pmaports
-          git remote add pipa https://github.com/pipa-project/pmaports-pipa.git
-          git fetch pipa
-          git reset --hard pipa/$(git remote show pipa | awk '/HEAD branch/ {print $NF}')
+          # Создаем конфиг принудительно без интерактива
+          pmbootstrap init --path /home/runner/.local/var/pmbootstrap --channel edge --vendor xiaomi --device pipa --ui console --systemd never --mirror-pmaports http://mirror.postmarketos.org --confirm-config
+
+      - name: Setup pmaports and Fix dependencies
+        run: |
+          # Клонируем порты pipa
+          cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
+          git remote add pipa https://github.com
+          git fetch pipa master
+          git reset --hard pipa/master
+          
+          # КРИТИЧЕСКИЙ ФИКС (вырезаем nofde и дубликаты)
+          find . -type f -name "APKBUILD" -exec sed -i 's/postmarketos-base-nofde/postmarketos-base/g' {} +
+          find . -type f -name "deviceinfo" -exec sed -i 's/postmarketos-base-nofde/postmarketos-base/g' {} +
+          
+          # Убираем дубли, вызывающие exit code 5
+          sed -i 's/doas-sudo-shim,//g;s/font-twemoji,//g' device/*/device-xiaomi-pipa/deviceinfo || true
+          
+          # Обновляем индексы
+          pmbootstrap checksum device-xiaomi-pipa
+          pmbootstrap checksum device-xiaomi-pipa-nonfree-firmware
           pmbootstrap index
 
-      - name: Build the xiaomi-pipa without DE
+      - name: Build GNOME Image
         run: |
-           sed -i "s|HOME|$(echo $HOME)|;s|NPROC|$(nproc)|" xiaomi-pipa.cfg
-           mkdir -p ~/.config
-           cp xiaomi-pipa.cfg ~/.config/pmbootstrap_v3.cfg
-           pmbootstrap build device-xiaomi-pipa --arch=aarch64
-           yes | pmbootstrap install --password 147147
-           pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
+          mkdir out
+          # Собираем GNOME (пароль 147147, без FDE)
+          # Флаг --no-fde важен, чтобы не искал старые пакеты
+          pmbootstrap install --password 147147 --ui gnome --no-fde --add gparted,parted,nano
+          pmbootstrap export
+          cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
+          cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-gnome.img
 
-      - name: Upload artifacts xiaomi-pipa without DE
-        if: always()
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-none
-           path: out/*.img*
-           retention-days: 7
-      
-      - name: Build the xiaomi-pipa with KDE Plasma Desktop
-        run: |
-           yes | pmbootstrap zap
-           rm -rf out/*
-           yes | pmbootstrap install --password 147147 --add postmarketos-ui-plasma-desktop
-           pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
-
-      - name: Upload artifacts xiaomi-pipa with KDE Plasma Desktop
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-plasma
-           path: out/*.img*
-           retention-days: 7
-
-      - name: Copy xiaomi-pipa kernel
-        run: |
-           rm -rf out/*
-           cp ~/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ 2>/dev/null || echo "Kernel apk not found"
-      
-      - name: Upload artifacts xiaomi-pipa kernel
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-kernel
-           path: out/*.apk
-           retention-days: 7
+          name: pipa-gnome-build
+          path: out/*.img
