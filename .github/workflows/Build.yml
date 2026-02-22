@@ -17,7 +17,6 @@ jobs:
         
       - name: Install pmbootstrap
         run: |
-          # Клонируем pmbootstrap в папку pmb-git
           git clone --depth=1 $(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d) pmb-git
           mkdir -p ~/.local/bin
           ln -s "$GITHUB_WORKSPACE/pmb-git/pmbootstrap.py" ~/.local/bin/pmbootstrap
@@ -25,18 +24,19 @@ jobs:
 
       - name: Setup pmaports
         run: |
-          # Используем прямой путь, так как PATH обновится в следующем шаге
           PMB="$HOME/.local/bin/pmbootstrap"
           
-          $PMB init --path /home/runner/.local/var/pmbootstrap --channel edge --vendor xiaomi --device pipa --ui console --systemd never --confirm-config
+          # Классический init через эмуляцию ввода (v3-совместимый)
+          # 1. Путь 2. Канал 3. Вендор 4. Девайс 5. UI 6. Доп.пакеты 7. systemd (never) 8. Остальное по дефолту
+          echo -e "/home/runner/.local/var/pmbootstrap\nedge\nxiaomi\npipa\nconsole\nnone\nnever\nn" | $PMB init || true
           
           cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           git remote add pipa $(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
           git fetch pipa master
           git reset --hard pipa/master
           
+          # ФИКСЫ
           find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i "s/$(echo "cG9zdG1hcmtldG9zLWJhc2Utbm9mZGU=" | base64 -d)/$(echo "cG9zdG1hcmtldG9zLWJhc2U=" | base64 -d)/g" {} +
-          
           sed -i 's/doas-sudo-shim,//g;s/font-twemoji,//g' device/*/device-xiaomi-pipa/deviceinfo || true
           
           $PMB checksum device-xiaomi-pipa
@@ -51,13 +51,6 @@ jobs:
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-plasma.img
       
-      - name: Breakpoint Plasma
-        if: failure()
-        uses: namespacelabs/breakpoint-action@v0
-        with:
-          duration: 30m
-          authorized-users: nixxizlab
-      
       - name: Build GNOME
         run: |
            pmbootstrap zap -y
@@ -65,13 +58,6 @@ jobs:
            pmbootstrap export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-gnome.img
-      
-      - name: Breakpoint GNOME
-        if: failure()
-        uses: namespacelabs/breakpoint-action@v0
-        with:
-          duration: 30m
-          authorized-users: nixxizlab
 
       - name: Copy Kernel
         run: |
