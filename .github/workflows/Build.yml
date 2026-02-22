@@ -23,7 +23,7 @@ jobs:
       - name: Setup Environment
         run: |
           mkdir -p ~/.config
-          # КОНФИГ V3 С ФИКСИРОВАННЫМИ ВЕРСИЯМИ
+          # КОНФИГ V3 С ПОЛНЫМИ ПУТЯМИ К ЗЕРКАЛАМ
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmb]
           config_version = 3
@@ -31,26 +31,35 @@ jobs:
           work = /home/runner/.local/var/pmbootstrap
           jobs = $(nproc)
           user = runner
+          
           [channels]
           channel = edge
           is_default_channel = False
+          
           [device]
           device = pipa
           vendor = xiaomi
+          
           [ui]
           ui = console
           systemd = never
+          
           [install]
           boot_size = 256
           extra_space = 2048
           password = 147147
+          
           [mirrors]
-          alpine = http://mirror.postmarketos.org
+          # ВАЖНО: полные пути для Alpine и pMOS
+          alpine = http://dl-cdn.alpinelinux.org
           postmarketos = http://mirror.postmarketos.org
           EOF
           
-          # РУЧНОЙ КЛОН И ПАТЧ
+          # РУЧНОЙ КЛОН И ПРИНУДИТЕЛЬНАЯ ВЕРСИЯ WORKDIR
           mkdir -p /home/runner/.local/var/pmbootstrap/cache_git
+          mkdir -p /home/runner/.local/var/pmbootstrap/chroot_native
+          echo "8" > /home/runner/.local/var/pmbootstrap/version
+          
           git clone --depth=1 $(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d) /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           git remote add pipa $(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
@@ -60,10 +69,7 @@ jobs:
           find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i "s/$(echo "cG9zdG1hcmtldG9zLWJhc2Utbm9mZGU=" | base64 -d)/$(echo "cG9zdG1hcmtldG9zLWJhc2U=" | base64 -d)/g" {} +
           sed -i 's/doas-sudo-shim,//g;s/font-twemoji,//g' device/*/device-xiaomi-pipa/deviceinfo || true
           
-          # ПРИНУДИТЕЛЬНАЯ МИГРАЦИЯ ВЕРСИИ WORKFOLDER
-          mkdir -p /home/runner/.local/var/pmbootstrap/chroot_native
-          echo "8" > /home/runner/.local/var/pmbootstrap/version
-          
+          # ЯВНО УКАЗЫВАЕМ КОНФИГ
           pmbootstrap --config ~/.config/pmbootstrap.cfg checksum device-xiaomi-pipa
           pmbootstrap --config ~/.config/pmbootstrap.cfg index
 
