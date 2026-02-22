@@ -26,13 +26,14 @@ jobs:
         run: |
           mkdir -p /home/runner/.config
           
-          # РАСШИФРОВКА ЗЕРКАЛ (Hex -> URL со слэшами)
+          # РАСШИФРОВКА ЗЕРКАЛ (Hex)
           ALP_HEX="687474703a2f2f646c2d63646e2e616c70696e656c696e75782e6f72672f616c70696e652f"
           PMO_HEX="687474703a2f2f6d6972726f722e706f73746d61726b65746f732e6f72672f706f73746d61726b65746f732f"
           
           ALPINE_URL=$(echo "$ALP_HEX" | xxd -r -p)
           PMOS_URL=$(echo "$PMO_HEX" | xxd -r -p)
           
+          # КОНФИГ V3: Явный запрет qemu и systemd
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmb]
           config_version = 3
@@ -47,6 +48,7 @@ jobs:
           [device]
           device = pipa
           vendor = xiaomi
+          architecture = aarch64
           [ui]
           ui = console
           systemd = never
@@ -59,7 +61,6 @@ jobs:
           postmarketos = $PMOS_URL
           EOF
           
-          # ФИКС МИГРАЦИИ (v8)
           mkdir -p /home/runner/.local/var/pmbootstrap/cache_git
           mkdir -p /home/runner/.local/var/pmbootstrap/chroot_native
           echo "8" > /home/runner/.local/var/pmbootstrap/version
@@ -72,11 +73,13 @@ jobs:
           git remote add pipa $(echo "68747470733a2f2f6769746875622e636f6d2f706970612d70726f6a6563742f706d61706f7274732d706970612e676974" | xxd -r -p)
           git fetch pipa master && git reset --hard pipa/master
           
-          # ФИКС ЗАВИСИМОСТЕЙ (Base64 для nofde и base)
-          NOFDE_NAME=$(echo "cG9zdG1hcmtldG9zLWJhc2Utbm9mZGU=" | base64 -d)
-          BASE_NAME=$(echo "cG9zdG1hcmtldG9zLWJhc2U=" | base64 -d)
+          # ФИКС 1: УДАЛЯЕМ ПАПКУ nofde (чтобы не было Pkgname != Folder)
+          rm -rf main/postmarketos-base-nofde
           
-          find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i "s/$NOFDE_NAME/$BASE_NAME/g" {} +
+          # ФИКС 2: ЗАМЕНЯЕМ УПОМИНАНИЯ nofde НА base
+          find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i "s/postmarketos-base-nofde/postmarketos-base/g" {} +
+          
+          # ФИКС 3: УБИРАЕМ ДУБЛИ (exit code 5)
           sed -i 's/doas-sudo-shim,//g;s/font-twemoji,//g' device/*/device-xiaomi-pipa/deviceinfo || true
           
           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg checksum device-xiaomi-pipa
@@ -84,18 +87,20 @@ jobs:
 
       - name: Build Plasma
         run: |
-           sed -i 's/ui =.*/ui = plasma-mobile/' /home/runner/.config/pmbootstrap.cfg
+           sed -i 's/^ui =.*/ui = plasma-mobile/' /home/runner/.config/pmbootstrap.cfg
            pmbootstrap -c /home/runner/.config/pmbootstrap.cfg -y zap
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --no-fde --add gparted,parted
+           # ФИКС 4: ЯВНОЕ УКАЗАНИЕ ДЕВАЙСА (против qemu)
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install -d pipa --no-fde --add gparted,parted
            pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-plasma.img
 
       - name: Build GNOME
         run: |
-           sed -i 's/ui =.*/ui = gnome/' /home/runner/.config/pmbootstrap.cfg
+           sed -i 's/^ui =.*/ui = gnome/' /home/runner/.config/pmbootstrap.cfg
            pmbootstrap -c /home/runner/.config/pmbootstrap.cfg -y zap
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --no-fde --add gparted,parted,nano
+           # ФИКС 5: ЯВНОЕ УКАЗАНИЕ ДЕВАЙСА (против qemu)
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install -d pipa --no-fde --add gparted,parted,nano
            pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-gnome.img
