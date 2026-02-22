@@ -1,4 +1,4 @@
-name: Build pipa images
+name: Ultimate Pipa Build System
 on:
   push:
   workflow_dispatch:
@@ -7,30 +7,28 @@ on:
 
 jobs:
   build-image:
-    strategy:
-      matrix:
-        version: ["default"]
-
     runs-on: ubuntu-latest
     steps:
-      - name: Check out build configurations
+      - name: Checkout Configurations
         uses: actions/checkout@v4
         
-      - name: Create artifact directory
-        run: mkdir out
-        
-      - name: Install pmbootstrap from git
+      - name: Create Workspace
+        run: mkdir -p out
+
+      - name: Install pmbootstrap from Source
         run: |
           git clone --depth=1 $(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d) pmb-git
           mkdir -p ~/.local/bin
           ln -s "$GITHUB_WORKSPACE/pmb-git/pmbootstrap.py" ~/.local/bin/pmbootstrap
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Set up pmaports and Fix Dependencies
+      - name: Setup Environment and Fix Pmaports
         run: |
           mkdir -p ~/.config
+          # ГЕНЕРАЦИЯ УЛЬТИМАТИВНОГО КОНФИГА v3.9.0
           cat <<EOF > ~/.config/pmbootstrap.cfg
           [pmb]
+          config_version = 3
           aports = /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           work = /home/runner/.local/var/pmbootstrap
           jobs = $(nproc)
@@ -47,96 +45,64 @@ jobs:
           [install]
           boot_size = 256
           extra_space = 2048
+          password = 147147
           [mirrors]
           alpine = http://mirror.postmarketos.org
           postmarketos = http://mirror.postmarketos.org
           EOF
           
+          # Клонирование и патчинг портов
           mkdir -p /home/runner/.local/var/pmbootstrap/cache_git
           git clone --depth=1 $(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d) /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           git remote add pipa $(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
-          git fetch pipa master
-          git reset --hard pipa/master
+          git fetch pipa master && git reset --hard pipa/master
           
+          # ФИКСЫ: Убираем nofde и дубликаты, которые вызывают Error 5
           find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i "s/$(echo "cG9zdG1hcmtldG9zLWJhc2Utbm9mZGU=" | base64 -d)/$(echo "cG9zdG1hcmtldG9zLWJhc2U=" | base64 -d)/g" {} +
-          sed -i 's/doas-sudo-shim,//g;s/font-twemoji,//g' device/*/device-xiaomi-pipa/deviceinfo || true
+          sed -i 's/doas-sudo-shim,//g;s/font-twemoji,//g;s/font-droid,//g' device/*/device-xiaomi-pipa/deviceinfo || true
           
           pmbootstrap checksum device-xiaomi-pipa
           pmbootstrap checksum device-xiaomi-pipa-nonfree-firmware
           pmbootstrap index
 
-      - name: Build the xiaomi-pipa without DE
+      - name: Build: Console (Base)
         run: |
-           pmbootstrap install --password 147147 --ui console --no-fde
+           pmbootstrap install --ui console --no-fde
            pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
-
-      - name: Breakpoint if tests failed for xiaomi-pipa without DE
+           cp /tmp/postmarketOS-export/boot.img out/boot-pipa-base.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-base.img
+      
+      - name: Breakpoint: Base Failure
         if: failure()
         uses: namespacelabs/breakpoint-action@v0
         with:
           duration: 30m
           authorized-users: nixxizlab
-      
-      - name: Upload artifacts xiaomi-pipa without DE
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-none
-           path: out/*.img*
 
-      - name: Build the xiaomi-pipa with KDE Plasma Desktop
+      - name: Build: Plasma Mobile
         run: |
-           yes | pmbootstrap zap
-           rm -r out/*
-           pmbootstrap install --password 147147 --ui plasma-mobile --no-fde --add gparted,parted
+           yes | pmbootstrap zap -y
+           pmbootstrap install --ui plasma-mobile --no-fde --add gparted,parted
            pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
+           cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-plasma.img
 
-      - name: Breakpoint if Plasma failed
-        if: failure()
-        uses: namespacelabs/breakpoint-action@v0
-        with:
-          duration: 30m
-          authorized-users: nixxizlab
-      
-      - name: Upload artifacts xiaomi-pipa with KDE
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-plasma
-           path: out/*.img*
-            
-      - name: Build the xiaomi-pipa with GNOME
+      - name: Build: GNOME Desktop
         run: |
-           yes | pmbootstrap zap
-           rm -r out/*
-           pmbootstrap install --password 147147 --ui gnome --no-fde --add gparted,parted,nano
+           yes | pmbootstrap zap -y
+           pmbootstrap install --ui gnome --no-fde --add gparted,parted,nano
            pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-gnome.img
-      
-      - name: Breakpoint if GNOME failed
-        if: failure()
-        uses: namespacelabs/breakpoint-action@v0
-        with:
-          duration: 30m
-          authorized-users: nixxizlab
-            
-      - name: Upload artifacts xiaomi-pipa with GNOME
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-gnome
-           path: out/*.img*
-           
-      - name: Copy xiaomi-pipa kernel
+           cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
+           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-gnome.img
+
+      - name: Extract Kernel Package
         run: |
-           rm -r out/*
            cp /home/runner/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ || true
-      
-      - name: Upload artifacts xiaomi-pipa kernel
+
+      - name: Upload Build Results
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-kernel
-           path: out/*.apk
+           name: pipa-full-build-bundle
+           path: out/*
+           retention-days: 7
