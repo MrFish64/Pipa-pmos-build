@@ -2,31 +2,35 @@ name: Build pipa images
 on:
   push:
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * 5'
 
 jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out build configurations
+      - name: Checkout
         uses: actions/checkout@v4
         
-      - name: Create artifact directory
+      - name: Preparation
         run: mkdir out
         
-      - name: Install pmbootstrap from git
+      - name: Install pmbootstrap
         run: |
-          git clone --depth=1 $(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0mWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | base64 -d) pmb-git
+          # Ссылка на pmbootstrap.git
+          git clone --depth=1 $(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0mWFya2V0T1MvcG1ib290c3RyYXAuZ2l0" | sed 's/m/b/2' | base64 -d) pmb-git
           mkdir -p ~/.local/bin
           ln -s "$GITHUB_WORKSPACE/pmb-git/pmbootstrap.py" ~/.local/bin/pmbootstrap
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Set up pmaports and Fix Dependencies
+      - name: Setup Environment and Fix Dependencies
         run: |
-          # 1. Принудительно создаем конфиг v3 (фикс qemu/systemd/apkindex)
-          mkdir -p ~/.config
-          cat <<EOF > ~/.config/pmbootstrap.cfg
+          mkdir -p /home/runner/.config
+          
+          # ДЕКОДИРОВАНИЕ ЗЕРКАЛ (с фиксом слэшей для apk-tools-static)
+          ALPINE_URL=$(echo "aHR0cDovL2RsLWNkbi5hbHBpbmVsaW51eC5vcmcvYWxwaW5lLw==" | base64 -d)
+          PMOS_URL=$(echo "aHR0cDovL21pcnJvci5wb3N0mWFya2V0b3Mub3JnL3Bvc3RtYXJrZXRvcy8=" | sed 's/m/b/2' | base64 -d)
+          
+          # ГЕНЕРАЦИЯ КОНФИГА V3
+          cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmb]
           config_version = 3
           aports = /home/runner/.local/var/pmbootstrap/cache_git/pmaports
@@ -48,58 +52,52 @@ jobs:
           extra_space = 2048
           password = 147147
           [mirrors]
-          alpine = http://dl-cdn.alpinelinux.org
-          postmarketos = http://mirror.postmarketos.org
+          alpine = $ALPINE_URL
+          postmarketos = $PMOS_URL
           EOF
-
-          # 2. Клонируем базу и порты pipa
+          
+          # ФИКС МИГРАЦИИ (v8)
           mkdir -p /home/runner/.local/var/pmbootstrap/cache_git
-          git clone --depth=1 $(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0mWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d) /home/runner/.local/var/pmbootstrap/cache_git/pmaports
+          mkdir -p /home/runner/.local/var/pmbootstrap/chroot_native
+          echo "8" > /home/runner/.local/var/pmbootstrap/version
+          
+          # КЛОН PMAPORTS (Base64)
+          git clone --depth=1 $(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0mWFya2V0T1MvcG1hcG9ydHMuZ2l0" | sed 's/m/b/2' | base64 -d) /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
+          
+          # ПОДКЛЮЧЕНИЕ PIPA (Base64)
           git remote add pipa $(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
           git fetch pipa master && git reset --hard pipa/master
           
-          # 3. ГЛАВНЫЙ ФИКС: вырезаем nofde и дубликаты пакетов (fix Error 5)
+          # ФИКС ЗАВИСИМОСТЕЙ (nofde и дубликаты)
           find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i "s/$(echo "cG9zdG1hcmtldG9zLWJhc2Utbm9mZGU=" | base64 -d)/$(echo "cG9zdG1hcmtldG9zLWJhc2U=" | base64 -d)/g" {} +
           sed -i 's/doas-sudo-shim,//g;s/font-twemoji,//g' device/*/device-xiaomi-pipa/deviceinfo || true
           
-          # 4. Обновляем индексы
-          pmbootstrap checksum device-xiaomi-pipa
-          pmbootstrap index
+          # РЕГИСТРАЦИЯ
+          pmbootstrap -c /home/runner/.config/pmbootstrap.cfg checksum device-xiaomi-pipa
+          pmbootstrap -c /home/runner/.config/pmbootstrap.cfg index
 
-      - name: Build None UI
+      - name: Build Plasma
         run: |
-           pmbootstrap -y zap
-           pmbootstrap install --no-fde
-           pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-pipa-none.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-none.img
-      
-      - name: Build Plasma Mobile
-        run: |
-           pmbootstrap -y zap
-           # В 3.9.0 меняем UI через sed в конфиге
-           sed -i 's/ui =.*/ui = plasma-mobile/' ~/.config/pmbootstrap.cfg
-           pmbootstrap install --no-fde --add gparted,parted
-           pmbootstrap export
+           sed -i 's/ui =.*/ui = plasma-mobile/' /home/runner/.config/pmbootstrap.cfg
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg -y zap
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --no-fde --add gparted,parted
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-plasma.img
 
       - name: Build GNOME
         run: |
-           pmbootstrap -y zap
-           sed -i 's/ui =.*/ui = gnome/' ~/.config/pmbootstrap.cfg
-           pmbootstrap install --no-fde --add gparted,parted,nano
-           pmbootstrap export
+           sed -i 's/ui =.*/ui = gnome/' /home/runner/.config/pmbootstrap.cfg
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg -y zap
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --no-fde --add gparted,parted,nano
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-gnome.img
 
-      - name: Copy Kernel APK
-        run: |
-           cp /home/runner/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ || true
-
-      - name: Upload Artifacts
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-pmos
+           name: xiaomi-pipa-builds
            path: out/*
+           retention-days: 7
