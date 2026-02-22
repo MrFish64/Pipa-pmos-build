@@ -25,7 +25,7 @@ jobs:
           mkdir -p ~/.config
           cp xiaomi-pipa.cfg ~/.config/pmbootstrap.cfg
           
-          # ДЕКОДИРОВАНИЕ ССЫЛОК И ЗАМЕНА ПЕРЕМЕННЫХ
+          # РАСШИФРОВКА ССЫЛОК И ПЕРЕМЕННЫХ
           sed -i "s|aHR0cDovL2RsLWNkbi5hbHBpbmVsaW51eC5vcmcvYWxwaW5lLw==|$(echo "aHR0cDovL2RsLWNkbi5hbHBpbmVsaW51eC5vcmcvYWxwaW5lLw==" | base64 -d)|g" ~/.config/pmbootstrap.cfg
           sed -i "s|aHR0cDovL21pcnJvci5wb3N0bWFya2V0b3Mub3JnL3Bvc3RtYXJrZXRvcy8=|$(echo "aHR0cDovL21pcnJvci5wb3N0bWFya2V0b3Mub3JnL3Bvc3RtYXJrZXRvcy8=" | base64 -d)|g" ~/.config/pmbootstrap.cfg
           sed -i "s|HOME|/home/runner|g;s|NPROC|$(nproc)|g" ~/.config/pmbootstrap.cfg
@@ -41,7 +41,7 @@ jobs:
           git remote add pipa $(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
           git fetch pipa master && git reset --hard pipa/master
           
-          # ВЫРЕЗАЕМ NOFDE И ДУБЛИКАТЫ
+          # ФИКС ЗАВИСИМОСТЕЙ NOFDE
           find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i "s/$(echo "cG9zdG1hcmtldG9zLWJhc2Utbm9mZGU=" | base64 -d)/$(echo "cG9zdG1hcmtldG9zLWJhc2U=" | base64 -d)/g" {} +
           sed -i 's/doas-sudo-shim,//g;s/font-twemoji,//g' device/*/device-xiaomi-pipa/deviceinfo || true
           
@@ -50,7 +50,8 @@ jobs:
 
       - name: Build Plasma
         run: |
-           pmbootstrap --config ~/.config/pmbootstrap.cfg zap -y
+           # ФЛАГ -y ПЕРЕД КОМАНДОЙ ZAP
+           pmbootstrap -y --config ~/.config/pmbootstrap.cfg zap
            pmbootstrap --config ~/.config/pmbootstrap.cfg install --ui plasma-mobile --no-fde --add gparted,parted
            pmbootstrap --config ~/.config/pmbootstrap.cfg export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
@@ -58,7 +59,8 @@ jobs:
 
       - name: Build GNOME
         run: |
-           pmbootstrap --config ~/.config/pmbootstrap.cfg zap -y
+           # ФЛАГ -y ПЕРЕД КОМАНДОЙ ZAP
+           pmbootstrap -y --config ~/.config/pmbootstrap.cfg zap
            pmbootstrap --config ~/.config/pmbootstrap.cfg install --ui gnome --no-fde --add gparted,parted,nano
            pmbootstrap --config ~/.config/pmbootstrap.cfg export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
