@@ -2,8 +2,6 @@ name: Build pipa images
 on:
   push:
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * 5'
 
 jobs:
   build-image:
@@ -24,48 +22,62 @@ jobs:
 
       - name: Setup pmaports
         run: |
-          PMB="$HOME/.local/bin/pmbootstrap"
+          mkdir -p ~/.config
           
-          # Классический init через эмуляцию ввода (v3-совместимый)
-          # 1. Путь 2. Канал 3. Вендор 4. Девайс 5. UI 6. Доп.пакеты 7. systemd (never) 8. Остальное по дефолту
-          echo -e "/home/runner/.local/var/pmbootstrap\nedge\nxiaomi\npipa\nconsole\nnone\nnever\nn" | $PMB init || true
+          # Жесткий конфиг: pipa вместо qemu, systemd выключен
+          cat <<EOF > ~/.config/pmbootstrap.cfg
+          [pmbootstrap]
+          aports = /home/runner/.local/var/pmbootstrap/cache_git/pmaports
+          work = /home/runner/.local/var/pmbootstrap
+          jobs = $(nproc)
+          mirror_alpine = http://mirror.postmarketos.org
+          mirrors_postmarketos = http://mirror.postmarketos.org
+          channel = edge
+          vendor = xiaomi
+          device = pipa
+          ui = console
+          user = runner
+          boot_size = 256
+          extra_space = 2048
+          systemd = never
+          is_default_channel = False
+          EOF
+
+          mkdir -p /home/runner/.local/var/pmbootstrap/cache_git
+          git clone --depth=1 $(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d) /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           
           cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           git remote add pipa $(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
           git fetch pipa master
           git reset --hard pipa/master
           
-          # ФИКСЫ
+          # Фикс зависимости nofde и дубликатов (exit code 5)
           find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i "s/$(echo "cG9zdG1hcmtldG9zLWJhc2Utbm9mZGU=" | base64 -d)/$(echo "cG9zdG1hcmtldG9zLWJhc2U=" | base64 -d)/g" {} +
           sed -i 's/doas-sudo-shim,//g;s/font-twemoji,//g' device/*/device-xiaomi-pipa/deviceinfo || true
           
-          $PMB checksum device-xiaomi-pipa
-          $PMB checksum device-xiaomi-pipa-nonfree-firmware
-          $PMB index
+          pmbootstrap checksum device-xiaomi-pipa
+          pmbootstrap checksum device-xiaomi-pipa-nonfree-firmware
+          pmbootstrap index
 
-      - name: Build Plasma
+      - name: Build GNOME Image
         run: |
            pmbootstrap zap -y
-           pmbootstrap install --password 147147 --ui plasma-mobile --no-fde --add gparted,parted
-           pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-plasma.img
-      
-      - name: Build GNOME
-        run: |
-           pmbootstrap zap -y
+           # Сборка образа pipa (aarch64) с GNOME
            pmbootstrap install --password 147147 --ui gnome --no-fde --add gparted,parted,nano
            pmbootstrap export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-gnome.img
 
-      - name: Copy Kernel
-        run: |
-           cp /home/runner/.local/var/pmbootstrap/packages/edge/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/ || true
+      - name: Breakpoint on Failure
+        if: failure()
+        uses: namespacelabs/breakpoint-action@v0
+        with:
+          duration: 30m
+          authorized-users: nixxizlab
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-postmarketos
+           name: xiaomi-pipa-gnome
            path: out/*
            retention-days: 7
