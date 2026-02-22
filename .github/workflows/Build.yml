@@ -20,11 +20,15 @@ jobs:
           git clone --depth=1 $(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d)
           mkdir -p ~/.local/bin
           ln -s "$GITHUB_WORKSPACE/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
+          # Добавляем в PATH для всех следующих шагов
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Setup pmaports
         run: |
-          pmbootstrap init --path /home/runner/.local/var/pmbootstrap --channel edge --vendor xiaomi --device pipa --ui console --systemd never --confirm-config
+          # В этом шаге вызываем через полный путь, так как PATH еще не обновился
+          PMB="$HOME/.local/bin/pmbootstrap"
+          
+          $PMB init --path /home/runner/.local/var/pmbootstrap --channel edge --vendor xiaomi --device pipa --ui console --systemd never --confirm-config
           
           cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           git remote add pipa $(echo "aHR0cHM6Ly9naXRodWIuY29tL3BpcGEtcHJvamVjdC9wbWFwb3J0cy1waXBhLmdpdA==" | base64 -d)
@@ -35,13 +39,13 @@ jobs:
           
           sed -i 's/doas-sudo-shim,//g;s/font-twemoji,//g' device/*/device-xiaomi-pipa/deviceinfo || true
           
-          pmbootstrap checksum device-xiaomi-pipa
-          pmbootstrap checksum device-xiaomi-pipa-nonfree-firmware
-          pmbootstrap index
+          $PMB checksum device-xiaomi-pipa
+          $PMB checksum device-xiaomi-pipa-nonfree-firmware
+          $PMB index
 
       - name: Build Plasma
         run: |
-           yes | pmbootstrap zap
+           pmbootstrap zap -y
            pmbootstrap install --password 147147 --ui plasma-mobile --no-fde --add gparted,parted
            pmbootstrap export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
@@ -56,7 +60,7 @@ jobs:
       
       - name: Build GNOME
         run: |
-           yes | pmbootstrap zap
+           pmbootstrap zap -y
            pmbootstrap install --password 147147 --ui gnome --no-fde --add gparted,parted,nano
            pmbootstrap export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
