@@ -23,7 +23,7 @@ jobs:
       - name: Setup Environment
         run: |
           mkdir -p ~/.config
-          # Пишем конфиг с ПРАВИЛЬНЫМ заголовком v3
+          # КОНФИГ V3 С ФИКСИРОВАННЫМИ ВЕРСИЯМИ
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmb]
           config_version = 3
@@ -49,7 +49,7 @@ jobs:
           postmarketos = http://mirror.postmarketos.org
           EOF
           
-          # Клонируем порты вручную
+          # РУЧНОЙ КЛОН И ПАТЧ
           mkdir -p /home/runner/.local/var/pmbootstrap/cache_git
           git clone --depth=1 $(echo "aHR0cHM6Ly9naXRsYWIucG9zdG1hcmtldG9zLm9yZy9wb3N0bWFya2V0T1MvcG1hcG9ydHMuZ2l0" | base64 -d) /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
@@ -60,9 +60,11 @@ jobs:
           find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i "s/$(echo "cG9zdG1hcmtldG9zLWJhc2Utbm9mZGU=" | base64 -d)/$(echo "cG9zdG1hcmtldG9zLWJhc2U=" | base64 -d)/g" {} +
           sed -i 's/doas-sudo-shim,//g;s/font-twemoji,//g' device/*/device-xiaomi-pipa/deviceinfo || true
           
-          # Явно указываем конфиг для команд регистрации
+          # ПРИНУДИТЕЛЬНАЯ МИГРАЦИЯ ВЕРСИИ WORKFOLDER
+          mkdir -p /home/runner/.local/var/pmbootstrap/chroot_native
+          echo "8" > /home/runner/.local/var/pmbootstrap/version
+          
           pmbootstrap --config ~/.config/pmbootstrap.cfg checksum device-xiaomi-pipa
-          pmbootstrap --config ~/.config/pmbootstrap.cfg checksum device-xiaomi-pipa-nonfree-firmware
           pmbootstrap --config ~/.config/pmbootstrap.cfg index
 
       - name: Build Plasma
