@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-image:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create out directory
+      - name: Preparation
         run: mkdir -p out
 
       - name: Install pmbootstrap
@@ -20,12 +20,10 @@ jobs:
           ln -s "$GITHUB_WORKSPACE/pmb-git/pmbootstrap.py" ~/.local/bin/pmbootstrap
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Setup Environment (WSL Style Fix)
+      - name: Setup
         run: |
           mkdir -p /home/runner/.config
-          
-          # ГЕНЕРАЦИЯ КОНФИГА V3
-          cat <<EOF > /home/runner/.config/pmbootstrap.cfg
+          cat <<EOF > /home/runner/.config/pmbootstrap_v3.cfg
           [pmb]
           config_version = 3
           aports = /home/runner/.local/var/pmbootstrap/cache_git/pmaports
@@ -48,52 +46,45 @@ jobs:
           extra_space = 2048
           password = 147147
           [mirrors]
-          alpine = $(echo "687474703a2f2f646c2d63646e2e616c70696e656c696e75782e6f72672f616c70696e652f" | xxd -r -p)
-          postmarketos = $(echo "687474703a2f2f6d6972726f722e706f73746d61726b65746f732e6f72672f706f73746d61726b65746f732f" | xxd -r -p)
+          alpine = http://dl-cdn.alpinelinux.org
+          postmarketos = http://mirror.postmarketos.org
           EOF
           
-          cp /home/runner/.config/pmbootstrap.cfg /home/runner/.config/pmbootstrap_v3.cfg
+          cp /home/runner/.config/pmbootstrap_v3.cfg /home/runner/.config/pmbootstrap.cfg
           mkdir -p /home/runner/.local/var/pmbootstrap/chroot_native
           echo "8" > /home/runner/.local/var/pmbootstrap/version
           
           git clone --depth=1 $(echo "68747470733a2f2f6769746c61622e706f73746d61726b65746f732e6f72672f706f73746d61726b65744f532f706d61706f7274732e676974" | xxd -r -p) /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
-          git remote add pipa $(echo "68747470733a2f2f6769746875622e636f6d2f706970612d70726f6a6563742f706m61706f7274732d706970612e676974" | sed 's/6m/61/' | xxd -r -p)
+          git remote add pipa $(echo "68747470733a2f2f6769746875622e636f6d2f706970612d70726f6a6563742f706d61706f7274732d706970612e676974" | xxd -r -p)
           git fetch pipa master && git reset --hard pipa/master
           
-          # ФИКСЫ: nofde и дубликаты
           rm -rf main/postmarketos-base-nofde
           find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i 's/postmarketos-base-nofde/postmarketos-base/g;s/doas-sudo-shim,//g;s/font-twemoji,//g;s/font-droid-nonlatin,//g;s/font-droid,//g' {} +
           
-          pmbootstrap -c /home/runner/.config/pmbootstrap.cfg checksum device-xiaomi-pipa
-          pmbootstrap -c /home/runner/.config/pmbootstrap.cfg index
+          pmbootstrap -c /home/runner/.config/pmbootstrap_v3.cfg checksum device-xiaomi-pipa
+          pmbootstrap -c /home/runner/.config/pmbootstrap_v3.cfg index
 
-      - name: Build Plasma Mobile
+      - name: Plasma
         run: |
-           # Принудительно выставляем UI и Device в конфиг перед командой
-           sed -i 's/^ui =.*/ui = plasma-mobile/' /home/runner/.config/pmbootstrap.cfg
-           sed -i 's/^device =.*/device = pipa/' /home/runner/.config/pmbootstrap.cfg
-           pmbootstrap -y -c /home/runner/.config/pmbootstrap.cfg zap
-           
-           # СЕКРЕТ: Указываем девайс как аргумент команды install
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --device=pipa --add gparted,parted
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export --device=pipa
-           cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-plasma.img
+          sed -i 's/^ui =.*/ui = plasma-mobile/' /home/runner/.config/pmbootstrap_v3.cfg
+          pmbootstrap -c /home/runner/.config/pmbootstrap_v3.cfg -y zap
+          pmbootstrap -c /home/runner/.config/pmbootstrap_v3.cfg install --add gparted,parted
+          pmbootstrap -c /home/runner/.config/pmbootstrap_v3.cfg export
+          cp /tmp/postmarketOS-export/boot.img out/boot-plasma.img
+          cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-plasma.img
 
-      - name: Build GNOME Desktop
+      - name: Gnome
         run: |
-           sed -i 's/^ui =.*/ui = gnome/' /home/runner/.config/pmbootstrap.cfg
-           sed -i 's/^device =.*/device = pipa/' /home/runner/.config/pmbootstrap.cfg
-           pmbootstrap -y -c /home/runner/.config/pmbootstrap.cfg zap
-           
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --device=pipa --add gparted,parted,nano
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export --device=pipa
-           cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-gnome.img
+          sed -i 's/^ui =.*/ui = gnome/' /home/runner/.config/pmbootstrap_v3.cfg
+          pmbootstrap -c /home/runner/.config/pmbootstrap_v3.cfg -y zap
+          pmbootstrap -c /home/runner/.config/pmbootstrap_v3.cfg install --add gparted,parted,nano
+          pmbootstrap -c /home/runner/.config/pmbootstrap_v3.cfg export
+          cp /tmp/postmarketOS-export/boot.img out/boot-gnome.img
+          cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-gnome.img
 
-      - name: Upload Artifacts
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-builds
-           path: out/*.img
+          name: pipa-images
+          path: out/*.img
