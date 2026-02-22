@@ -10,22 +10,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create out directory
+      - name: Preparation
         run: mkdir -p out
 
       - name: Install pmbootstrap
         run: |
-          # Ссылка на pmbootstrap через Hex
           git clone --depth=1 $(echo "68747470733a2f2f6769746c61622e706f73746d61726b65746f732e6f72672f706f73746d61726b65744f532f706d626f6f7473747261702e676974" | xxd -r -p) pmb-git
           mkdir -p ~/.local/bin
           ln -s "$GITHUB_WORKSPACE/pmb-git/pmbootstrap.py" ~/.local/bin/pmbootstrap
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Setup Environment (Hardcore Fix)
+      - name: Setup Environment (Absolute Fix)
         run: |
           mkdir -p /home/runner/.config
           
-          # ПИШЕМ КОНФИГ v3 (Ссылки вставляем прямо текстом, чтобы bash не тупил)
+          # ГЕНЕРИРУЕМ КОНФИГ
           cat <<EOF > /home/runner/.config/pmbootstrap.cfg
           [pmb]
           config_version = 3
@@ -52,50 +51,44 @@ jobs:
           alpine = http://dl-cdn.alpinelinux.org
           postmarketos = http://mirror.postmarketos.org
           EOF
+          
+          # Дублируем для новой версии v3
+          cp /home/runner/.config/pmbootstrap.cfg /home/runner/.config/pmbootstrap_v3.cfg
 
-          # Фикс воркдира (версия 8)
+          # Подготовка путей
           mkdir -p /home/runner/.local/var/pmbootstrap/cache_git
           mkdir -p /home/runner/.local/var/pmbootstrap/chroot_native
           echo "8" > /home/runner/.local/var/pmbootstrap/version
           
-          # Клон pmaports (Hex: https://gitlab.postmarketos.org)
+          # Клон pmaports
           git clone --depth=1 $(echo "68747470733a2f2f6769746c61622e706f73746d61726b65746f732e6f72672f706f73746d61726b65744f532f706d61706f7274732e676974" | xxd -r -p) /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           
           cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
-          # Клон pipa (Hex: https://github.com)
           git remote add pipa $(echo "68747470733a2f2f6769746875622e636f6d2f706970612d70726f6a6563742f706d61706f7274732d706970612e676974" | xxd -r -p)
           git fetch pipa master && git reset --hard pipa/master
           
-          # ФИКСЫ: nofde и дубликаты
+          # ФИКСЫ: удаляем nofde
           rm -rf main/postmarketos-base-nofde
           find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i "s/postmarketos-base-nofde/postmarketos-base/g" {} +
           sed -i 's/doas-sudo-shim,//g;s/font-twemoji,//g' device/*/device-xiaomi-pipa/deviceinfo || true
           
-          # Принудительно юзаем наш конфиг
+          # РЕГИСТРАЦИЯ (С ПРЯМЫМ УКАЗАНИЕМ КОНФИГА)
           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg checksum device-xiaomi-pipa
           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg index
 
-      - name: Build Plasma Mobile
+      - name: Build Images
         run: |
-           # Смена UI через конфиг
-           sed -i 's/^ui =.*/ui = plasma-mobile/' /home/runner/.config/pmbootstrap.cfg
-           pmbootstrap -y -c /home/runner/.config/pmbootstrap.cfg zap
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --add gparted,parted
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export
-           cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-plasma.img
-
-      - name: Build GNOME Mobile
-        run: |
+           # Сборка GNOME
            sed -i 's/^ui =.*/ui = gnome/' /home/runner/.config/pmbootstrap.cfg
-           pmbootstrap -y -c /home/runner/.config/pmbootstrap.cfg zap
-           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --add gparted,parted,nano
+           cp /home/runner/.config/pmbootstrap.cfg /home/runner/.config/pmbootstrap_v3.cfg
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg -y zap
+           pmbootstrap -c /home/runner/.config/pmbootstrap.cfg install --add gparted,parted
            pmbootstrap -c /home/runner/.config/pmbootstrap.cfg export
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-gnome.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-gnome.img
 
-      - name: Upload Image Artifacts
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-           name: xiaomi-pipa-images
+           name: pipa-builds
            path: out/*.img
