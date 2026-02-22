@@ -67,7 +67,7 @@ jobs:
           pmbootstrap checksum device-xiaomi-pipa
           pmbootstrap index
 
-      - name: Build: None UI
+      - name: Build None UI
         run: |
            pmbootstrap -y zap
            pmbootstrap install --no-fde
@@ -75,7 +75,7 @@ jobs:
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-none.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-none.img
       
-      - name: Build: Plasma Mobile
+      - name: Build Plasma Mobile
         run: |
            pmbootstrap -y zap
            # В 3.9.0 меняем UI через sed в конфиге
@@ -85,7 +85,7 @@ jobs:
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-plasma.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-plasma.img
 
-      - name: Build: GNOME
+      - name: Build GNOME
         run: |
            pmbootstrap -y zap
            sed -i 's/ui =.*/ui = gnome/' ~/.config/pmbootstrap.cfg
