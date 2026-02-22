@@ -31,17 +31,37 @@ jobs:
           pmbootstrap --version
       - name: Set up pmaports
         run: |
-          pmbootstrap init --path /home/runner/.local/var/pmbootstrap --channel edge --vendor xiaomi --device pipa --ui console --systemd never --confirm-config
-          cd ~/.local/var/pmbootstrap/cache_git/pmaports
-          git remote
+          # Вместо init создаем конфиг, чтобы не было qemu и systemd
+          mkdir -p ~/.config
+          cat <<EOF > ~/.config/pmbootstrap.cfg
+          [pmb]
+          config_version = 3
+          aports = /home/runner/.local/var/pmbootstrap/cache_git/pmaports
+          work = /home/runner/.local/var/pmbootstrap
+          jobs = $(nproc)
+          user = runner
+          [channels]
+          channel = edge
+          [device]
+          device = pipa
+          vendor = xiaomi
+          [ui]
+          ui = console
+          systemd = never
+          EOF
+          mkdir -p /home/runner/.local/var/pmbootstrap/cache_git
+          git clone --depth=1 https://gitlab.postmarketos.org/postarketOS/pmaports.git /home/runner/.local/var/pmbootstrap/cache_git/pmaports
+          cd /home/runner/.local/var/pmbootstrap/cache_git/pmaports
           git remote add pipa https://github.com/pipa-project/pmaports-pipa.git
-          DEFAULT_BRANCH=$(git remote show pipa | awk '/HEAD branch/ {print $NF}')
-          git fetch pipa $DEFAULT_BRANCH
-          git reset --hard pipa/$DEFAULT_BRANCH
+          git fetch pipa master
+          git reset --hard pipa/master
+
+          # ЭТИ СТРОКИ ЧИНЯТ EXIT CODE 1
           rm -rf main/postmarketos-base-nofde
           find . -type f \( -name "APKBUILD" -o -name "deviceinfo" \) -exec sed -i 's/postmarketos-base-nofde/postmarketos-base/g;s/doas-sudo-shim,//g;s/font-twemoji,//g;s/font-droid-nonlatin,//g;s/font-droid,//g' {} +
           pmbootstrap checksum device-xiaomi-pipa
           pmbootstrap index
+
 
       - name: Build the xiaomi-pipa without DE
         run: |
