@@ -73,7 +73,7 @@ jobs:
            cp /tmp/postmarketOS-export/boot.img out/boot-pipa-base.img
            cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-pipa-base.img
       
-      - name: Breakpoint: Base Failure
+      - name: Breakpoint Base Failure
         if: failure()
         uses: namespacelabs/breakpoint-action@v0
         with:
