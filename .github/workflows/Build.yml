@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ui: [plasma-desktop, plasma-mobile]
+        ui: [plasma-desktop, plasma-mobile, gnome-mobile]
 
     steps:
       - name: Free up disk space
