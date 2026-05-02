@@ -110,8 +110,10 @@ jobs:
           echo "=== Archive(s) ==="
           ls -lh /tmp/pmos-xiaomi-pipa*
 
-      - name: Set release tag
-        run: echo "RELEASE_TAG=build-$(date -u +'%Y%m%d-%H%M')" >> "$GITHUB_ENV"
+      - name: Set release info
+        run: |
+          echo "RELEASE_TAG=${{ matrix.ui }}-$(date -u +'%Y%m%d-%H%M')" >> "$GITHUB_ENV"
+          echo "RELEASE_NAME=pipa - ${{ matrix.ui }} - $(date +'%Y-%m-%d')" >> "$GITHUB_ENV"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
@@ -124,7 +126,7 @@ jobs:
             | Field    | Value |
             |----------|-------|
             | Device   | Xiaomi Pad 6 (xiaomi-pipa) |
-            | UI       | ${{ github.event.inputs.ui || 'plasma-desktop' }} |
+            | UI       | ${{ matrix.ui }} |
             | Built    | ${{ env.RELEASE_TAG }} |
             | Branch   | pmaports edge |
 
