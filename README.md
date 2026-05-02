@@ -28,7 +28,7 @@
 
 - **Supported Desktop Environments**  
   * KDE Plasma Desktop  
-  * Plasma Mobile
+  * Gnome Mobile
     
 - **Automated Builds**  
   ✅ Builds every day (UTC)  
