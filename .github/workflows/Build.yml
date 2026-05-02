@@ -1,132 +1,169 @@
-name: Xiaomi Pad 6 postmarketOS
+name: Build postmarketOS for xiaomi-pipa
+
 on:
-  push: # Build when push
   workflow_dispatch:
+    inputs:
+      ui:
+        description: "User interface to build"
+        required: true
+        default: "phosh"
+        type: choice
+        options:
+          - plasma-desktop
+          - phosh
+          - plasma-mobile
+          - sxmo-de-sway
+          - none
+      extra_space_mb:
+        description: "Extra rootfs free space in MB"
+        required: false
+        default: "0"
   schedule:
-    - cron: '0 0 * * 5' # Start build every friday
+    - cron: "14 3 2 * *"
 
 jobs:
-  build-image:
-    strategy:
-      matrix:
-        version: ["default"]
-
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
-      - name: Check out build configurations
-        uses: actions/checkout@v4
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/share/swift
+          sudo apt-get clean
+          sudo apt-get autoremove -y
+          sudo rm -rf /var/cache/apt /var/lib/apt/lists/*
+          df -h
 
-      - name: Set current date variable
-        run: echo "CURRENT_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
-        
-      - name: Create artifact directory
-        run: |
-            mkdir out
-        
-      - name: Substitute placeholders in configs
-        run: |
-           find . -type f -name "*.cfg" -exec sed -i "s|HOME|$(echo $HOME)|;s|NPROC|$(nproc)|" {} +
+      - name: Checkout
+        uses: actions/checkout@v6
 
-      - name: Install pmbootstrap from git
+      - name: Install host dependencies
         run: |
-          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git
+          sudo apt-get update -qq
+          sudo apt-get install -y python3 openssl git qemu-user-static binfmt-support p7zip-full
+          sudo systemctl start binfmt-support
+          sudo update-binfmts --enable qemu-aarch64
+          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git ~/pmbootstrap
           mkdir -p ~/.local/bin
-          ln -s "$PWD/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
-          pmbootstrap --version
+          ln -s "$HOME/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Set up pmaports
+      - name: Restore pmbootstrap cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.local/var/pmbootstrap/packages
+            ~/.local/var/pmbootstrap/cache_apk_index
+            ~/.local/var/pmbootstrap/cache_ccache
+          key: pmos-pipa-${{ github.event.inputs.ui || 'plasma-desktop' }}-${{ hashFiles('pmbootstrap_v3.cfg') }}-${{ github.run_id }}
+          restore-keys: |
+            pmos-pipa-${{ github.event.inputs.ui || 'plasma-desktop' }}-${{ hashFiles('pmbootstrap_v3.cfg') }}-
+            pmos-pipa-${{ github.event.inputs.ui || 'plasma-desktop' }}-
+
+      - name: Write pmbootstrap config
         run: |
-          echo -e '\n\n' | pmbootstrap init || true
-          cd ~/.local/var/pmbootstrap/cache_git/pmaports
-          git remote
-          git remote add pipa https://github.com/pipa-project/pmaports-pipa.git
-          DEFAULT_BRANCH=$(git remote show pipa | awk '/HEAD branch/ {print $NF}')
-          git fetch pipa $DEFAULT_BRANCH
-          git reset --hard pipa/$DEFAULT_BRANCH
+          mkdir -p ~/.config
+          UI="${{ github.event.inputs.ui || 'plasma-desktop' }}"
+          EXTRA_SPACE="${{ github.event.inputs.extra_space_mb || '0' }}"
+          sed \
+            -e "s|^ui = .*|ui = ${UI}|" \
+            -e "s|^extra_space = .*|extra_space = ${EXTRA_SPACE}|" \
+            -e "s|^work = .*|work = /home/runner/.local/var/pmbootstrap|" \
+            pmbootstrap_v3.cfg > ~/.config/pmbootstrap_v3.cfg
+          cat ~/.config/pmbootstrap_v3.cfg
 
-      - name: Build the xiaomi-pipa without DE
+      - name: Initialize pmbootstrap
+        env:
+          PMB_FDE_PASSWORD: "147147"
+        run: yes "" | pmbootstrap --config ~/.config/pmbootstrap_v3.cfg init
+
+      - name: Pull latest pmaports
+        run: pmbootstrap --config ~/.config/pmbootstrap_v3.cfg --details-to-stdout -y pull
+
+      - name: Build images
+        env:
+          PMB_FDE_PASSWORD: "147147"
         run: |
-           cp xiaomi-pipa.cfg ~/.config/pmbootstrap_v3.cfg
-           pmbootstrap install --password 147147
-           pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-none.img
+          pmbootstrap --config ~/.config/pmbootstrap_v3.cfg --details-to-stdout -y install --fde --password 147147 2>&1 | tee build.log
+          echo "=== Build Summary ==="
+          tail -50 build.log
+        timeout-minutes: 300
 
-      - name: Breakpoint if tests failed for xiaomi-pipa without DE
-        if: failure()
-        uses: namespacelabs/breakpoint-action@v0
-        with:
-          duration: 30m
-          authorized-users: MrFish64
-      
-      - name: Upload artifacts xiaomi-pipa without DE
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-none_${{ env.CURRENT_DATE }}
-           path: out/*.img*
-           retention-days: 7
-
-      - name: Build the xiaomi-pipa with KDE Plasma Desktop
+      - name: Export images
         run: |
-           yes | pmbootstrap zap
-           rm -r out/*
-           pmbootstrap install --password 147147 --add postmarketos-ui-plasma-desktop
-           cat /home/runner/.local/var/pmbootstrap/log.txt
-           pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-plasma.img
+          mkdir -p /tmp/pmos-export
+          cp -rL /home/runner/.local/var/pmbootstrap/chroot_rootfs_xiaomi-pipa/boot/* /tmp/pmos-export
+          cp -rL /home/runner/.local/var/pmbootstrap/chroot_native/home/pmos/rootfs/xiaomi-pipa.img /tmp/pmos-export
+          ls -lh /tmp/pmos-export/
+    
+          # Verify expected files exist
+          if [ ! -f /tmp/pmos-export/xiaomi-pipa.img ]; then
+            echo "ERROR: Expected files not found in export directory"
+            echo "=== pmbootstrap status ==="
+            pmbootstrap status
+            exit 1
+          fi
 
-      - name: Breakpoint if tests failed for xiaomi-pipa with KDE Plasma Desktop
-        if: failure()
-        uses: namespacelabs/breakpoint-action@v0
-        with:
-          duration: 30m
-          authorized-users: MrFish64
-      
-      - name: Upload artifacts xiaomi-pipa with KDE Plasma Desktop
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-plasma_${{ env.CURRENT_DATE }}
-           path: out/*.img*
-           retention-days: 7
-            
-      - name: Build the xiaomi-pipa with GNOME
+      - name: Resolve symlinks and compress
         run: |
-           yes | pmbootstrap zap
-           rm -r out/*
-           pmbootstrap install --password 147147 --add postmarketos-ui-gnome
-           pmbootstrap export
-           cp /tmp/postmarketOS-export/boot.img out/boot-xiaomi-pipa.img
-           cp /tmp/postmarketOS-export/xiaomi-pipa.img out/rootfs-xiaomi-pipa-gnome.img
+          # Copy everything from /tmp/pmos-export, resolving all symlinks to real files
+          mkdir -p /tmp/pmos-real
+          cp -rL /tmp/pmos-export/. /tmp/pmos-real/
+          echo "=== Real files ==="
+          ls -lh /tmp/pmos-real/
 
-      - name: Breakpoint if tests failed for xiaomi-pipa with GNOME
-        if: failure()
-        uses: namespacelabs/breakpoint-action@v0
+          # Compress into a .7z archive, splitting into 1GB volumes if needed
+          cd /tmp
+          7z a -mx=2 -v1g pmos-xiaomi-pipa.7z pmos-real/
+          echo "=== Archive(s) ==="
+          ls -lh /tmp/pmos-xiaomi-pipa*
+
+      - name: Set release tag
+        run: echo "RELEASE_TAG=build-$(date -u +'%Y%m%d-%H%M')" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
         with:
-          duration: 30m
-          authorized-users: rifux
-            
-      - name: Upload artifacts xiaomi-pipa with GNOME
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-gnome_${{ env.CURRENT_DATE }}
-           path: out/*.img*
-           retention-days: 7
-                       
-      - name: Copy xiaomi-pipa kernel
-        run: |
-           rm -r out/*
-           cp ~/.local/var/pmbootstrap/packages/*/aarch64/linux-postmarketos-qcom-sm8250-pipa-*.apk out/
-      
-      - name: Upload artifacts xiaomi-pipa kernel
-        uses: actions/upload-artifact@v4
-        with:
-           name: xiaomi-pipa-kernel_${{ env.CURRENT_DATE }}
-           path: out/*.apk
-           retention-days: 7
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "postmarketOS pipa - ${{ github.event.inputs.ui || 'plasma-desktop' }} - ${{ env.RELEASE_TAG }}"
+          body: |
+            ## postmarketOS for Xiaomi Pad 6 (xiaomi-pipa)
 
+            | Field    | Value |
+            |----------|-------|
+            | Device   | Xiaomi Pad 6 (xiaomi-pipa) |
+            | UI       | ${{ github.event.inputs.ui || 'plasma-desktop' }} |
+            | Built    | ${{ env.RELEASE_TAG }} |
+            | Branch   | pmaports edge |
 
+            ## Contents of the archive
 
-        
+            | File | Description |
+            |------|-------------|
+            | `boot.img` | Kernel + initramfs (fastboot) |
+            | `xiaomi-pipa.img` | Root filesystem image |
 
-        
+            If the archive is split into multiple `.7z` parts, download all of them before extracting.
+            Extract with: `7z x pmos-xiaomi-pipa.7z` (or `pmos-xiaomi-pipa.7z.001` if split)
+
+            ## Flashing instructions
+
+            Prerequisites: unlocked bootloader, fastboot installed on your PC.
+
+            ```sh
+            # Boot into fastboot mode
+            # Power off, then hold Volume Down + Power
+
+            fastboot erase dtbo
+            fastboot flash boot boot.img
+            fastboot flash userdata xiaomi-pipa-root.img
+            fastboot reboot
+            ```
+
+            Default login: username `user`, password `147147`
+
+            Warning: flashing will wipe userdata. Back up your Android data first.
+          files: /tmp/pmos-xiaomi-pipa.7z*
+          fail_on_unmatched_files: true
