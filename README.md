@@ -27,7 +27,6 @@
 ## 🌟 Features 
 
 - **Supported Desktop Environments**  
-  * KDE Plasma Desktop  
   * Gnome Mobile
     
 - **Automated Builds**  
