@@ -28,7 +28,8 @@
 
 - **Supported Desktop Environments**  
   * KDE Plasma Desktop  
-
+  * Plasma Mobile
+    
 - **Automated Builds**  
   ✅ Builds every day (UTC)  
   ✅ Kernel packages included  
@@ -50,16 +51,15 @@ Default System Credentials
 
 GitHub Actions Artifacts
   
-1. Visit our [Actions tab](https://github.com/MrFish64/Pipa-pmos-build/actions)   
-2. Look for the latest workflow run (marked with 🟢)  
+1. Visit our releases   
+2. Look for the latest release 
 3. Download the zip archive  
-*Note:* GitHub account required for downloads
 
 ---
 
 ## 🛠️ Getting Started
 
-1. **Download** your preferred image from the Actions tab  
+1. **Download** your preferred image from the releases
 2. **Extract** the ZIP archive  
 3. **Flash Singleboot(only Linux)**
 ```bash
