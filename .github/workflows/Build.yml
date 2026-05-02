@@ -117,7 +117,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          name: "postmarketOS pipa - ${{ github.event.inputs.ui || 'plasma-desktop' }} - ${{ env.RELEASE_TAG }}"
+          name: "postmarketOS pipa - ${{ matrix.ui }} - ${{ env.RELEASE_TAG }}"
           body: |
             ## postmarketOS for Xiaomi Pad 6 (xiaomi-pipa)
 
