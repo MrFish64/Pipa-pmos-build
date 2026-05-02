@@ -65,9 +65,9 @@ GitHub Actions Artifacts
 ```bash
 fastboot erase dtbo_a
 fastboot erase dtbo_b
-fastboot flash boot_a boot-xiaomi-pipa.img
-fastboot flash boot_b boot-xiaomi-pipa.img
-fastboot flash userdata rootfs-xiaomi-pipa-plasma.img
+fastboot flash boot_a boot.img
+fastboot flash boot_b boot.img
+fastboot flash userdata xiaomi-pipa.img
 ```
 **Flash Dualboot (Android and Linux)**
 ```bash
