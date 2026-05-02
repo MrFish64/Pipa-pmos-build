@@ -6,7 +6,7 @@ on:
       ui:
         description: "User interface to build"
         required: true
-        default: "phosh"
+        default: "plasma-desktop"
         type: choice
         options:
           - plasma-desktop
