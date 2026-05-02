@@ -2,30 +2,17 @@ name: Build postmarketOS for xiaomi-pipa
 
 on:
   workflow_dispatch:
-    inputs:
-      ui:
-        description: "User interface to build"
-        required: true
-        default: "plasma-desktop"
-        type: choice
-        options:
-          - plasma-desktop
-          - phosh
-          - plasma-mobile
-          - sxmo-de-sway
-          - none
-      extra_space_mb:
-        description: "Extra rootfs free space in MB"
-        required: false
-        default: "0"
   schedule:
     - cron: "0 0 * * *"
 
 jobs:
   build:
+    name: Build ${{ matrix.ui }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        ui: [plasma-desktop, plasma-mobile]
 
     steps:
       - name: Free up disk space
