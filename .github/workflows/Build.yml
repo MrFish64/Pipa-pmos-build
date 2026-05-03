@@ -5,7 +5,7 @@ on:
       extra_space_mb:
         description: "Extra rootfs free space in MB"
         required: false
-        default: "2048" # В 2026 году софт весит больше, лучше иметь запас
+        default: "2048"
 
   schedule:
     - cron: "14 3 2 * *"
@@ -26,6 +26,7 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/share/swift
           sudo apt-get clean
+          sudo rm -rf /var/cache/apt /var/lib/apt/lists/*
           df -h
 
       - name: Checkout
@@ -36,7 +37,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y python3 openssl git qemu-user-static binfmt-support p7zip-full
           sudo systemctl start binfmt-support
-          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git ~/pmbootstrap
+          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git  ~/pmbootstrap
           echo "$HOME/pmbootstrap" >> $GITHUB_PATH
 
       - name: Restore pmbootstrap cache
@@ -50,12 +51,12 @@ jobs:
           restore-keys: |
             pmos-pipa-${{ matrix.ui }}-${{ hashFiles('pmbootstrap_v3.cfg') }}-
 
-      - name: Write pmbootstrap config
+      - name: Setup pmbootstrap Config
         run: |
           mkdir -p ~/.config
           UI="${{ matrix.ui }}"
           EXTRA_SPACE="${{ github.event.inputs.extra_space_mb || '2048' }}"
-          # Используем актуальный формат конфига v3
+          
           sed \
             -e "s|^ui = .*|ui = ${UI}|" \
             -e "s|^extra_space = .*|extra_space = ${EXTRA_SPACE}|" \
@@ -63,45 +64,47 @@ jobs:
             pmbootstrap_v3.cfg > ~/.config/pmbootstrap_v3.cfg
 
       - name: Initialize pmbootstrap
-        env:
-          PMB_FDE_PASSWORD: "147147"
         run: |
-          python3 ~/pmbootstrap/pmbootstrap.py --config ~/.config/pmbootstrap_v3.cfg init -y
+          yes "" | python3 ~/pmbootstrap/pmbootstrap.py --config ~/.config/pmbootstrap_v3.cfg init
           python3 ~/pmbootstrap/pmbootstrap.py --config ~/.config/pmbootstrap_v3.cfg pull
 
       - name: Build images
         env:
           PMB_FDE_PASSWORD: "147147"
         run: |
-          python3 ~/pmbootstrap/pmbootstrap.py --config ~/.config/pmbootstrap_v3.cfg install --fde --password 147147 --details-to-stdout
+          python3 ~/pmbootstrap/pmbootstrap.py --config ~/.config/pmbootstrap_v3.cfg install \
+            --fde --password "$PMB_FDE_PASSWORD" \
+            --details-to-stdout --no-confirm
 
-      - name: Export and Compress
+      - name: Export and Package
         run: |
           mkdir -p /tmp/pmos-export
-          # Ищем файлы динамически, так как пути зависят от версии pmbootstrap
-          find /home/runner/.local/var/pmbootstrap/chroot_rootfs_xiaomi-pipa/boot/ -type f -exec cp {} /tmp/pmos-export/ \;
-          find /home/runner/.local/var/pmbootstrap/chroot_native/home/pmos/rootfs/ -name "*.img" -exec cp {} /tmp/pmos-export/xiaomi-pipa.img \;
+          WORK_DIR="/home/runner/.local/var/pmbootstrap"
+          
+          find $WORK_DIR/chroot_native/home/pmos/rootfs/ -name "xiaomi-pipa.img" -exec cp {} /tmp/pmos-export/xiaomi-pipa.img \;
+          
+          if [ -d "$WORK_DIR/chroot_rootfs_xiaomi-pipa/boot" ]; then
+            cp -rL $WORK_DIR/chroot_rootfs_xiaomi-pipa/boot/. /tmp/pmos-export/
+          fi
+          
+          find /tmp/pmos-export/ -type l -delete
           
           cd /tmp/pmos-export
           7z a -mx=2 -v1g /tmp/pmos-xiaomi-pipa-${{ matrix.ui }}.7z ./*
 
-      - name: Set release tag
-        run: echo "RELEASE_TAG=build-$(date -u +'%Y%m%d-%H%M')" >> "$GITHUB_ENV"
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: "pmOS pipa [${{ matrix.ui }}] - ${{ env.RELEASE_TAG }}"
+          tag_name: build-${{ github.run_id }}-${{ matrix.ui }}
+          name: "pmOS pipa [${{ matrix.ui }}] - $(date +'%Y-%m-%d')"
+          files: /tmp/pmos-xiaomi-pipa-${{ matrix.ui }}.7z*
           body: |
-            ## postmarketOS for Xiaomi Pad 6 (pipa)
-            - **UI:** `${{ matrix.ui }}`
-            - **Password:** `147147`
+            ### postmarketOS for Xiaomi Pad 6 (pipa)
+            - UI: `${{ matrix.ui }}`
+            - Password: `147147`
             
-            Flash Turotial:
+            Flash:
             ```sh
-            fastboot erase dtbo
             fastboot flash boot boot.img
             fastboot flash userdata xiaomi-pipa.img
             ```
-          files: /tmp/pmos-xiaomi-pipa-${{ matrix.ui }}.7z*
