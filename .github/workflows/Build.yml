@@ -32,7 +32,7 @@ jobs:
       - name: Install host dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y python3 openssl git qemu-user-static binfmt-support p7zip-full
+          sudo apt-get install -y python3 openssl git qemu-user-static binfmt-support zip
           sudo systemctl start binfmt-support
           sudo update-binfmts --enable qemu-aarch64
           git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git ~/pmbootstrap
@@ -47,16 +47,15 @@ jobs:
             ~/.local/var/pmbootstrap/packages
             ~/.local/var/pmbootstrap/cache_apk_index
             ~/.local/var/pmbootstrap/cache_ccache
-          key: pmos-pipa-${{ github.event.inputs.ui || 'plasma-desktop' }}-${{ hashFiles('pmbootstrap_v3.cfg') }}-${{ github.run_id }}
+          key: pmos-pipa-${{ matrix.ui }}-${{ hashFiles('pmbootstrap_v3.cfg') }}-${{ github.run_id }}
           restore-keys: |
-            pmos-pipa-${{ github.event.inputs.ui || 'plasma-desktop' }}-${{ hashFiles('pmbootstrap_v3.cfg') }}-
-            pmos-pipa-${{ github.event.inputs.ui || 'plasma-desktop' }}-
+            pmos-pipa-${{ matrix.ui }}-${{ hashFiles('pmbootstrap_v3.cfg') }}-
 
       - name: Write pmbootstrap config
         run: |
           mkdir -p ~/.config
-          UI="${{ github.event.inputs.ui || 'plasma-desktop' }}"
-          EXTRA_SPACE="${{ github.event.inputs.extra_space_mb || '0' }}"
+          UI="${{ matrix.ui }}"
+          EXTRA_SPACE="0"
           sed \
             -e "s|^ui = .*|ui = ${UI}|" \
             -e "s|^extra_space = .*|extra_space = ${EXTRA_SPACE}|" \
@@ -70,7 +69,12 @@ jobs:
         run: yes "" | pmbootstrap --config ~/.config/pmbootstrap_v3.cfg init
 
       - name: Pull latest pmaports
-        run: pmbootstrap --config ~/.config/pmbootstrap_v3.cfg --details-to-stdout -y pull
+        run: |
+          pmbootstrap --config ~/.config/pmbootstrap_v3.cfg --details-to-stdout -y pull
+          cd ~/.local/var/pmbootstrap/cache_git/pmaports
+          git remote add pipa https://github.com/pipa-project/pmaports-pipa.git || true
+          git fetch pipa
+          git reset --hard pipa/$(git remote show pipa | awk '/HEAD branch/ {print $NF}')
 
       - name: Build images
         env:
@@ -81,64 +85,62 @@ jobs:
           tail -50 build.log
         timeout-minutes: 300
 
-      - name: Export images
+      - name: Export and ZIP
         run: |
-          mkdir -p /tmp/pmos-export
-          cp -rL /home/runner/.local/var/pmbootstrap/chroot_rootfs_xiaomi-pipa/boot/* /tmp/pmos-export
-          cp -rL /home/runner/.local/var/pmbootstrap/chroot_native/home/pmos/rootfs/xiaomi-pipa.img /tmp/pmos-export
-          ls -lh /tmp/pmos-export/
-    
-          # Verify expected files exist
-          if [ ! -f /tmp/pmos-export/xiaomi-pipa.img ]; then
-            echo "ERROR: Expected files not found in export directory"
-            echo "=== pmbootstrap status ==="
-            pmbootstrap status
-            exit 1
-          fi
+          mkdir -p /tmp/export
+          cp -rL /home/runner/.local/var/pmbootstrap/chroot_rootfs_xiaomi-pipa/boot/* /tmp/export/
+          cp -rL /home/runner/.local/var/pmbootstrap/chroot_native/home/pmos/rootfs/xiaomi-pipa.img /tmp/export/
+          cd /tmp/export
+          zip -r "/tmp/pipa-${{ matrix.ui }}.zip" .
+          ls -lh /tmp/pipa-${{ matrix.ui }}.zip
 
-      - name: Resolve symlinks and compress
-        run: |
-          # Copy everything from /tmp/pmos-export, resolving all symlinks to real files
-          mkdir -p /tmp/pmos-real
-          cp -rL /tmp/pmos-export/. /tmp/pmos-real/
-          echo "=== Real files ==="
-          ls -lh /tmp/pmos-real/
+      - name: Upload temporary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zip-${{ matrix.ui }}
+          path: /tmp/pipa-${{ matrix.ui }}.zip
+          retention-days: 1
 
-          # Compress into a .7z archive, splitting into 1GB volumes if needed
-          cd /tmp
-          7z a -mx=2 -v1g pmos-xiaomi-pipa.7z pmos-real/
-          echo "=== Archive(s) ==="
-          ls -lh /tmp/pmos-xiaomi-pipa*
-
-      - name: Set release info
-        run: |
-          echo "RELEASE_TAG=${{ matrix.ui }}-$(date -u +'%Y%m%d-%H%M')" >> "$GITHUB_ENV"
-          echo "RELEASE_NAME=pipa - ${{ matrix.ui }} - $(date +'%Y-%m-%d')" >> "$GITHUB_ENV"
+  publish:
+    name: Create Combined Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all ZIPs
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/release-files
+          pattern: zip-*
+          merge-multiple: true
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: "postmarketOS pipa - ${{ matrix.ui }} - ${{ env.RELEASE_TAG }}"
+          tag_name: build-$(date +'%Y%m%d-%H%M')
+          name: "Xiaomi Pad 6 Builds - $(date +'%Y-%m-%d')"
           body: |
             ## postmarketOS for Xiaomi Pad 6 (xiaomi-pipa)
+
 
             | Field    | Value |
             |----------|-------|
             | Device   | Xiaomi Pad 6 (xiaomi-pipa) |
-            | UI       | ${{ matrix.ui }} |
-            | Built    | ${{ env.RELEASE_TAG }} |
+            | UI       | Plasma Desktop & GNOME Mobile |
+            | Built    | $(date +'%Y-%m-%d') |
             | Branch   | pmaports edge |
 
             ## Contents of the archive
+
 
             | File | Description |
             |------|-------------|
             | `boot.img` | Kernel + initramfs (fastboot) |
             | `xiaomi-pipa.img` | Root filesystem image |
 
-            If the archive is split into multiple `.7z` parts, download all of them before extracting.
-            Extract with: `7z x pmos-xiaomi-pipa.7z` (or `pmos-xiaomi-pipa.7z.001` if split)
+            Each UI is packed into its own .zip archive. Download the one you prefer.
+            Extract with: `unzip pipa-*.zip`
 
             ## Flashing instructions
 
@@ -150,12 +152,13 @@ jobs:
 
             fastboot erase dtbo
             fastboot flash boot boot.img
-            fastboot flash userdata xiaomi-pipa-root.img
+            fastboot flash userdata xiaomi-pipa.img
             fastboot reboot
             ```
 
             Default login: username `user`, password `147147`
 
             Warning: flashing will wipe userdata. Back up your Android data first.
-          files: /tmp/pmos-xiaomi-pipa.7z*
+          files: /tmp/release-files/*.zip
           fail_on_unmatched_files: true
+          
