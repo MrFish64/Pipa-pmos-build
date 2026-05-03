@@ -33,6 +33,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 🔍 Debug workspace (ВАЖНО)
+      - name: Debug workspace
+        run: |
+          echo "PWD: $(pwd)"
+          echo "Workspace:"
+          ls -la
+
       # 💾 Free space
       - name: Maximize disk space
         uses: easimon/maximize-build-space@v10
@@ -73,27 +80,45 @@ jobs:
             ~/.local/var/pmbootstrap/cache_apk_index
             ~/.local/var/pmbootstrap/cache_ccache
             ~/.local/var/pmbootstrap/cache_distfiles
-          key: pmos-${{ env.DEVICE }}-${{ matrix.ui }}
+          key: pmos-${{ env.DEVICE }}-${{ matrix.ui }}-${{ hashFiles('pmbootstrap_v3.cfg') }}
+          restore-keys: |
+            pmos-${{ env.DEVICE }}-${{ matrix.ui }}-
 
-      # ⚙️ Config (STATIC — no sed, no magic)
+      # ⚙️ Config (НАДЁЖНО)
       - name: Setup config
         run: |
-          mkdir -p ~/.config
-          cp pmbootstrap_v3.cfg $CONFIG
+          set -e
 
-          echo "=== CONFIG ==="
-          cat $CONFIG
+          mkdir -p ~/.config
+
+          echo "=== FILES IN WORKSPACE ==="
+          ls -la $GITHUB_WORKSPACE
+
+          CONFIG_SRC="$GITHUB_WORKSPACE/pmbootstrap_v3.cfg"
+
+          if [ ! -f "$CONFIG_SRC" ]; then
+            echo "❌ CONFIG NOT FOUND: $CONFIG_SRC"
+            exit 1
+          fi
+
+          cp "$CONFIG_SRC" "$CONFIG"
+
+          echo "=== CONFIG CONTENT ==="
+          cat "$CONFIG"
 
       # 🚀 Init
       - name: Init pmbootstrap
         env:
           PMB_FDE_PASSWORD: ${{ env.PASSWORD }}
         run: |
+          set -e
           pmbootstrap --config $CONFIG init --non-interactive
 
       # 🔄 Sync pmaports
       - name: Sync pmaports + overlay
         run: |
+          set -e
+
           pmbootstrap --config $CONFIG -y pull
 
           cd "${WORKDIR}/cache_git/pmaports"
@@ -104,7 +129,7 @@ jobs:
           BRANCH=$(git remote show pipa | awk '/HEAD branch/ {print $NF}')
           git reset --hard "pipa/$BRANCH"
 
-      # 🏗 Build
+      # 🏗 Build (FIXED UI)
       - name: Build images
         env:
           PMB_FDE_PASSWORD: ${{ env.PASSWORD }}
@@ -115,6 +140,7 @@ jobs:
             --details-to-stdout -y install \
             --fde --password $PASSWORD \
             --jobs $(nproc) \
+            --ui ${{ matrix.ui }} \
             2>&1 | tee build.log
 
           tail -50 build.log
@@ -148,26 +174,22 @@ jobs:
     needs: build
 
     steps:
-      # 📥 Download
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: /tmp/release
           merge-multiple: true
 
-      # 🏷 Metadata
       - name: Set metadata
         run: |
           echo "TAG=build-$(date +'%Y%m%d-%H%M-%S')" >> $GITHUB_ENV
           echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
 
-      # 🧪 Safety check
       - name: Verify artifacts
         run: |
           ls -lah /tmp/release
           test -n "$(ls -A /tmp/release/*.zip)"
 
-      # 🧹 Cleanup old releases
       - name: Cleanup old releases
         uses: dev-drprasad/delete-older-releases@v0.3.4
         with:
@@ -176,7 +198,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 🚀 Release
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -185,27 +206,18 @@ jobs:
           body: |
             # 🐧 postmarketOS Nightly
 
-            Device: Xiaomi Pad 6 (xiaomi-pipa)  
+            Device: Xiaomi Pad 6 (xiaomi-pipa)
             Date: ${{ env.DATE }}
-
-            ---
 
             ## 📦 Builds
             - Plasma Desktop
             - GNOME Mobile
 
-            ---
-
             ## ⚡ Flash
-
-            ```
             fastboot erase dtbo
             fastboot flash boot boot.img
             fastboot flash userdata xiaomi-pipa.img
             fastboot reboot
-            ```
-
-            ---
 
             ## 🔐 Login
             user / 147147
