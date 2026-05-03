@@ -1,164 +1,232 @@
-name: Build postmarketOS for xiaomi-pipa
+name: 🐧 postmarketOS • Xiaomi Pad 6 (pipa) NIGHTLY
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 0 * * *" 
-    
+    - cron: "0 0 * * *"
+
+concurrency:
+  group: pmos-pipa
+  cancel-in-progress: true
+
 permissions:
   contents: write
-  
+
+env:
+  DEVICE: xiaomi-pipa
+  WORKDIR: /home/runner/.local/var/pmbootstrap
+  CONFIG: /home/runner/.config/pmbootstrap_v3.cfg
+  PASSWORD: "147147"
+
 jobs:
   build:
-    name: Build ${{ matrix.ui }}
+    name: 🛠️ Build (${{ matrix.ui }})
     runs-on: ubuntu-latest
+
     strategy:
       fail-fast: false
       matrix:
         ui: [plasma-desktop, gnome-mobile]
 
     steps:
-      - name: Free up disk space
+      # 📥 Checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 💾 Free space (important for pmOS builds)
+      - name: Maximize disk space
+        uses: easimon/maximize-build-space@v10
+        with:
+          root-reserve-mb: 1024
+          swap-size-mb: 4096
+
+      - name: Cleanup runner
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/share/swift
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/share/swift || true
           sudo apt-get clean
-          sudo apt-get autoremove -y
-          sudo rm -rf /var/cache/apt /var/lib/apt/lists/*
           df -h
 
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install host dependencies
+      # 📦 Dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y python3 openssl git qemu-user-static binfmt-support zip
-          sudo systemctl start binfmt-support
-          sudo update-binfmts --enable qemu-aarch64
-          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git ~/pmbootstrap
-          mkdir -p ~/.local/bin
-          ln -s "$HOME/pmbootstrap/pmbootstrap.py" ~/.local/bin/pmbootstrap
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          sudo apt-get install -y \
+            python3 git openssl \
+            qemu-user-static binfmt-support \
+            zip
 
-      - name: Restore pmbootstrap cache
-        uses: actions/cache@v5
+          sudo systemctl start binfmt-support || true
+          sudo update-binfmts --enable qemu-aarch64 || true
+
+          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git ~/pmbootstrap
+
+          mkdir -p ~/.local/bin
+          ln -sf ~/pmbootstrap/pmbootstrap.py ~/.local/bin/pmbootstrap
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      # ⚡ Cache (speed boost)
+      - name: Restore cache
+        uses: actions/cache@v4
         with:
           path: |
             ~/.local/var/pmbootstrap/packages
             ~/.local/var/pmbootstrap/cache_apk_index
             ~/.local/var/pmbootstrap/cache_ccache
-          key: pmos-pipa-${{ matrix.ui }}-${{ hashFiles('pmbootstrap_v3.cfg') }}-${{ github.run_id }}
-          restore-keys: |
-            pmos-pipa-${{ matrix.ui }}-${{ hashFiles('pmbootstrap_v3.cfg') }}-
+            ~/.local/var/pmbootstrap/cache_distfiles
+          key: pmos-${{ env.DEVICE }}-${{ matrix.ui }}
 
-      - name: Write pmbootstrap config
+      # ⚙️ Config generation
+      - name: Generate pmbootstrap config
         run: |
           mkdir -p ~/.config
-          UI="${{ matrix.ui }}"
-          EXTRA_SPACE="0"
+
           sed \
-            -e "s|^ui = .*|ui = ${UI}|" \
-            -e "s|^extra_space = .*|extra_space = ${EXTRA_SPACE}|" \
-            -e "s|^work = .*|work = /home/runner/.local/var/pmbootstrap|" \
-            pmbootstrap_v3.cfg > ~/.config/pmbootstrap_v3.cfg
-          cat ~/.config/pmbootstrap_v3.cfg
+            -e "s|^ui = .*|ui = ${{ matrix.ui }}|" \
+            -e "s|^work = .*|work = ${WORKDIR}|" \
+            pmbootstrap_v3.cfg > $CONFIG
 
-      - name: Initialize pmbootstrap
+          echo "=== CONFIG ==="
+          cat $CONFIG
+
+      # 🚀 Init
+      - name: Init pmbootstrap
         env:
-          PMB_FDE_PASSWORD: "147147"
-        run: yes "" | pmbootstrap --config ~/.config/pmbootstrap_v3.cfg init
-
-      - name: Pull latest pmaports
+          PMB_FDE_PASSWORD: ${{ env.PASSWORD }}
         run: |
-          pmbootstrap --config ~/.config/pmbootstrap_v3.cfg --details-to-stdout -y pull
-          cd ~/.local/var/pmbootstrap/cache_git/pmaports
+          pmbootstrap --config $CONFIG init --non-interactive
+
+      # 🔄 Sync sources
+      - name: Sync pmaports + overlay
+        run: |
+          pmbootstrap --config $CONFIG -y pull
+
+          cd "${WORKDIR}/cache_git/pmaports"
+
           git remote add pipa https://github.com/pipa-project/pmaports-pipa.git || true
           git fetch pipa
-          git reset --hard pipa/$(git remote show pipa | awk '/HEAD branch/ {print $NF}')
 
+          BRANCH=$(git remote show pipa | awk '/HEAD branch/ {print $NF}')
+          git reset --hard "pipa/$BRANCH"
+
+      # 🏗 Build
       - name: Build images
         env:
-          PMB_FDE_PASSWORD: "147147"
+          PMB_FDE_PASSWORD: ${{ env.PASSWORD }}
         run: |
-          pmbootstrap --config ~/.config/pmbootstrap_v3.cfg --details-to-stdout -y install --fde --password 147147 2>&1 | tee build.log
-          echo "=== Build Summary ==="
+          set -euo pipefail
+
+          pmbootstrap --config $CONFIG \
+            --details-to-stdout -y install \
+            --fde --password $PASSWORD \
+            --jobs $(nproc) \
+            2>&1 | tee build.log
+
+          echo "=== LAST LOG ==="
           tail -50 build.log
-        timeout-minutes: 300
+        timeout-minutes: 360
 
-      - name: Export and ZIP
+      # 📦 Package
+      - name: Package artifacts
         run: |
-          mkdir -p /tmp/export
-          cp -rL /home/runner/.local/var/pmbootstrap/chroot_rootfs_xiaomi-pipa/boot/* /tmp/export/
-          cp -rL /home/runner/.local/var/pmbootstrap/chroot_native/home/pmos/rootfs/xiaomi-pipa.img /tmp/export/
-          cd /tmp/export
-          zip -r "/tmp/pipa-${{ matrix.ui }}.zip" .
-          ls -lh /tmp/pipa-${{ matrix.ui }}.zip
+          set -e
 
-      - name: Upload temporary artifact
+          OUT="/tmp/${DEVICE}-${{ matrix.ui }}"
+          mkdir -p "$OUT"
+
+          cp -rL ${WORKDIR}/chroot_rootfs_${DEVICE}/boot/* "$OUT/" || true
+          find ${WORKDIR} -name "${DEVICE}.img" -exec cp {} "$OUT/" \;
+
+          cd "$OUT"
+          zip -r "/tmp/${DEVICE}-${{ matrix.ui }}.zip" .
+
+          echo "PACKAGED: $(ls -lh /tmp/${DEVICE}-${{ matrix.ui }}.zip)"
+
+      # 📤 Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zip-${{ matrix.ui }}
-          path: /tmp/pipa-${{ matrix.ui }}.zip
-          retention-days: 1
+          name: ${{ matrix.ui }}
+          path: /tmp/${{ env.DEVICE }}-${{ matrix.ui }}.zip
+          retention-days: 2
 
-  publish:
-    name: Create Combined Release
-    needs: build
+  release:
+    name: 🚀 Release Nightly
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    needs: build
+
     steps:
-      - name: Download all ZIPs
+      # 📥 Download artifacts
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          path: /tmp/release-files
-          pattern: zip-*
+          path: /tmp/release
           merge-multiple: true
 
-      - name: Create GitHub Release
+      # 🧾 Metadata
+      - name: Set metadata
+        run: |
+          echo "TAG=build-$(date +'%Y%m%d-%H%M-%S')" >> $GITHUB_ENV
+          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+
+      # 🧪 Safety check (no empty releases)
+      - name: Verify artifacts
+        run: |
+          echo "Artifacts:"
+          ls -lah /tmp/release
+          test -n "$(ls -A /tmp/release/*.zip)"
+
+      # 🧹 Cleanup old releases
+      - name: Cleanup old releases
+        uses: dev-drprasad/delete-older-releases@v0.3.4
+        with:
+          keep_latest: 5
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 🚀 Publish release
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-$(date +'%Y%m%d-%H%M')
-          name: "Xiaomi Pad 6 Builds - $(date +'%Y-%m-%d')"
+          tag_name: ${{ env.TAG }}
+          name: "📱 Xiaomi Pad 6 • postmarketOS NIGHTLY (${{ env.DATE }})"
           body: |
-            ## postmarketOS for Xiaomi Pad 6 (xiaomi-pipa)
+            # 🐧 postmarketOS Nightly Build
 
+            Device: Xiaomi Pad 6 (xiaomi-pipa)  
+            Date: ${{ env.DATE }}
 
-            | Field    | Value |
-            |----------|-------|
-            | Device   | Xiaomi Pad 6 (xiaomi-pipa) |
-            | UI       | Plasma Desktop & GNOME Mobile |
-            | Built    | $(date +'%Y-%m-%d') |
-            | Branch   | pmaports edge |
+            ---
 
-            ## Contents of the archive
+            ## 🧾 Build variants
+            - Plasma Desktop
+            - GNOME Mobile
 
+            ---
 
-            | File | Description |
-            |------|-------------|
-            | `boot.img` | Kernel + initramfs (fastboot) |
-            | `xiaomi-pipa.img` | Root filesystem image |
+            ## 📦 Contents
+            - boot.img
+            - xiaomi-pipa.img
 
-            Each UI is packed into its own .zip archive. Download the one you prefer.
-            Extract with: `unzip pipa-*.zip`
+            ---
 
-            ## Flashing instructions
+            ## ⚡ Flash instructions
 
-            Prerequisites: unlocked bootloader, fastboot installed on your PC.
-
-            ```sh
-            # Boot into fastboot mode
-            # Power off, then hold Volume Down + Power
-
+            ```
             fastboot erase dtbo
             fastboot flash boot boot.img
             fastboot flash userdata xiaomi-pipa.img
             fastboot reboot
             ```
 
-            Default login: username `user`, password `147147`
+            ---
 
-            Warning: flashing will wipe userdata. Back up your Android data first.
-          files: /tmp/release-files/*.zip
-          fail_on_unmatched_files: true
-          
+            ## 🔐 Default login
+            user / 147147
+
+            ---
+
+            ⚠️ Nightly build — expect bugs, instability possible.
+
+          files: |
+            /tmp/release/*.zip
