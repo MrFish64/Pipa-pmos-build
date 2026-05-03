@@ -1,4 +1,4 @@
-name: 🐧 postmarketOS • Xiaomi Pad 6 (pipa) NIGHTLY
+name: 🐧 postmarketOS • Xiaomi Pad 6 (pipa)
 
 on:
   workflow_dispatch:
@@ -33,7 +33,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 💾 Free space (important for pmOS builds)
+      # 💾 Free space
       - name: Maximize disk space
         uses: easimon/maximize-build-space@v10
         with:
@@ -64,7 +64,7 @@ jobs:
           ln -sf ~/pmbootstrap/pmbootstrap.py ~/.local/bin/pmbootstrap
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      # ⚡ Cache (speed boost)
+      # ⚡ Cache
       - name: Restore cache
         uses: actions/cache@v4
         with:
@@ -75,15 +75,11 @@ jobs:
             ~/.local/var/pmbootstrap/cache_distfiles
           key: pmos-${{ env.DEVICE }}-${{ matrix.ui }}
 
-      # ⚙️ Config generation
-      - name: Generate pmbootstrap config
+      # ⚙️ Config (STATIC — no sed, no magic)
+      - name: Setup config
         run: |
           mkdir -p ~/.config
-
-          sed \
-            -e "s|^ui = .*|ui = ${{ matrix.ui }}|" \
-            -e "s|^work = .*|work = ${WORKDIR}|" \
-            pmbootstrap_v3.cfg > $CONFIG
+          cp pmbootstrap_v3.cfg $CONFIG
 
           echo "=== CONFIG ==="
           cat $CONFIG
@@ -95,7 +91,7 @@ jobs:
         run: |
           pmbootstrap --config $CONFIG init --non-interactive
 
-      # 🔄 Sync sources
+      # 🔄 Sync pmaports
       - name: Sync pmaports + overlay
         run: |
           pmbootstrap --config $CONFIG -y pull
@@ -121,7 +117,6 @@ jobs:
             --jobs $(nproc) \
             2>&1 | tee build.log
 
-          echo "=== LAST LOG ==="
           tail -50 build.log
         timeout-minutes: 360
 
@@ -139,9 +134,7 @@ jobs:
           cd "$OUT"
           zip -r "/tmp/${DEVICE}-${{ matrix.ui }}.zip" .
 
-          echo "PACKAGED: $(ls -lh /tmp/${DEVICE}-${{ matrix.ui }}.zip)"
-
-      # 📤 Upload artifacts
+      # 📤 Upload
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -150,28 +143,27 @@ jobs:
           retention-days: 2
 
   release:
-    name: 🚀 Release Nightly
+    name: 🚀 Release
     runs-on: ubuntu-latest
     needs: build
 
     steps:
-      # 📥 Download artifacts
+      # 📥 Download
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: /tmp/release
           merge-multiple: true
 
-      # 🧾 Metadata
+      # 🏷 Metadata
       - name: Set metadata
         run: |
           echo "TAG=build-$(date +'%Y%m%d-%H%M-%S')" >> $GITHUB_ENV
           echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
 
-      # 🧪 Safety check (no empty releases)
+      # 🧪 Safety check
       - name: Verify artifacts
         run: |
-          echo "Artifacts:"
           ls -lah /tmp/release
           test -n "$(ls -A /tmp/release/*.zip)"
 
@@ -184,33 +176,27 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 🚀 Publish release
-      - name: Create GitHub release
+      # 🚀 Release
+      - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
-          name: "📱 Xiaomi Pad 6 • postmarketOS NIGHTLY (${{ env.DATE }})"
+          name: "📱 Xiaomi Pad 6 • postmarketOS (${{ env.DATE }})"
           body: |
-            # 🐧 postmarketOS Nightly Build
+            # 🐧 postmarketOS Nightly
 
             Device: Xiaomi Pad 6 (xiaomi-pipa)  
             Date: ${{ env.DATE }}
 
             ---
 
-            ## 🧾 Build variants
+            ## 📦 Builds
             - Plasma Desktop
             - GNOME Mobile
 
             ---
 
-            ## 📦 Contents
-            - boot.img
-            - xiaomi-pipa.img
-
-            ---
-
-            ## ⚡ Flash instructions
+            ## ⚡ Flash
 
             ```
             fastboot erase dtbo
@@ -221,12 +207,8 @@ jobs:
 
             ---
 
-            ## 🔐 Default login
+            ## 🔐 Login
             user / 147147
-
-            ---
-
-            ⚠️ Nightly build — expect bugs, instability possible.
 
           files: |
             /tmp/release/*.zip
