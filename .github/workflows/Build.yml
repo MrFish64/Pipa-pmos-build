@@ -72,8 +72,13 @@ jobs:
         env:
           PMB_FDE_PASSWORD: "147147"
         run: |
-          python3 ~/pmbootstrap/pmbootstrap.py --config ~/.config/pmbootstrap_v3.cfg --details-to-stdout install \
-            --fde --password "$PMB_FDE_PASSWORD" -y
+          python3 ~/pmbootstrap/pmbootstrap.py \
+            --config ~/.config/pmbootstrap_v3.cfg \
+            --details-to-stdout \
+            -y \
+            install \
+            --fde \
+            --password "$PMB_FDE_PASSWORD"
 
       - name: Export and Package
         run: |
